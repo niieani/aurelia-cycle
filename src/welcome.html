@@ -1,0 +1,23 @@
+<template>
+  <section class="au-animate">
+    <h2>${heading}</h2>
+    <!--<div>${someBinding || 'nothing' & intercept: myFunc}</div>-->
+    <!--<span show.bind="worldPromise..ready">Hello ${worldPromise..value}</span>-->
+    <!--<p>${mouse..value.clientX}, ${mouse..value.clientY}</p>-->
+    <form role="form" submit.delegate="submit()">
+      <div class="form-group">
+        <label for="fn">First Name</label>
+        <input type="text" value.bind="someBinding || 'nothing' || 'wtf' & intercept & signal: 'test'" class="form-control" id="fn" placeholder="first name">
+      </div>
+      <div class="form-group">
+        <label for="ln">Last Name</label>
+        <input type="text" click.trigger="someMethod('yo', lastName) & intercept" value.bind="lastName" class="form-control" id="ln" placeholder="last name">
+      </div>
+      <div class="form-group">
+        <label>Full Name</label>
+        <p class="help-block">${fullName | upper}</p>
+      </div>
+      <button type="submit" class="btn btn-default">Submit</button>
+    </form>
+  </section>
+</template>
