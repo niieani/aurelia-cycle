@@ -9,6 +9,7 @@ System.config({
 
   map: {
     "@cycle/core": "npm:@cycle/core@7.0.0-rc1",
+    "@cycle/rxjs-adapter": "npm:@cycle/rxjs-adapter@1.0.0",
     "aurelia-animator-css": "npm:aurelia-animator-css@1.0.0-beta.1.1.1",
     "aurelia-binding": "npm:aurelia-binding@1.0.0-beta.1.1.3",
     "aurelia-bootstrapper": "npm:aurelia-bootstrapper@1.0.0-beta.1.1.2",
@@ -25,7 +26,8 @@ System.config({
     "core-js": "npm:core-js@2.1.0",
     "fetch": "github:github/fetch@0.10.1",
     "font-awesome": "npm:font-awesome@4.5.0",
-    "rxjs": "npm:rxjs@5.0.0-beta.1",
+    "lodash": "npm:lodash@4.5.1",
+    "rxjs": "npm:rxjs@5.0.0-beta.2",
     "text": "github:systemjs/plugin-text@0.0.3",
     "github:jspm/nodelibs-assert@0.1.0": {
       "assert": "npm:assert@1.3.0"
@@ -53,6 +55,12 @@ System.config({
     "npm:@cycle/rx-adapter@1.0.1": {
       "@cycle/base": "npm:@cycle/base@1.2.2",
       "rx": "npm:rx@4.0.8"
+    },
+    "npm:@cycle/rxjs-adapter@1.0.0": {
+      "@cycle/base": "npm:@cycle/base@1.2.2",
+      "buffer": "github:jspm/nodelibs-buffer@0.1.0",
+      "process": "github:jspm/nodelibs-process@0.1.2",
+      "rxjs": "npm:rxjs@5.0.0-beta.2"
     },
     "npm:assert@1.3.0": {
       "util": "npm:util@0.10.3"
@@ -206,6 +214,10 @@ System.config({
     "npm:inherits@2.0.1": {
       "util": "github:jspm/nodelibs-util@0.1.0"
     },
+    "npm:lodash@4.5.1": {
+      "buffer": "github:jspm/nodelibs-buffer@0.1.0",
+      "process": "github:jspm/nodelibs-process@0.1.2"
+    },
     "npm:path-browserify@0.0.0": {
       "process": "github:jspm/nodelibs-process@0.1.2"
     },
@@ -215,7 +227,7 @@ System.config({
     "npm:rx@4.0.8": {
       "process": "github:jspm/nodelibs-process@0.1.2"
     },
-    "npm:rxjs@5.0.0-beta.1": {
+    "npm:rxjs@5.0.0-beta.2": {
       "buffer": "github:jspm/nodelibs-buffer@0.1.0",
       "process": "github:jspm/nodelibs-process@0.1.2"
     },

@@ -15,8 +15,8 @@ var sass = require('gulp-sass');
 // https://www.npmjs.com/package/gulp-plumber
 var typescriptCompiler = typescriptCompiler || null;
 gulp.task('build-system', function() {
-  if(!typescriptCompiler) {
-    typescriptCompiler = typescript.create(require('../../tsconfig.json').compilerOptions);
+  if (!typescriptCompiler) {
+    typescriptCompiler = typescript.create(require('../../tsconfig.no-node.json').compilerOptions);
   }
   return gulp.src(paths.dtsSrc.concat(paths.source).concat(paths.sourceJs))
     .pipe(plumber())

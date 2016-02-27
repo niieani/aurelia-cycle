@@ -5,9 +5,6 @@ import {Router, RouterConfiguration} from 'aurelia-router'
 export class App {
   router: Router;
   
-  constructor() {
-  }
-  
   configureRouter(config: RouterConfiguration, router: Router) {
     config.title = 'Aurelia';
     config.map([
