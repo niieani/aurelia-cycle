@@ -16,8 +16,10 @@ export class Welcome {
   // worldPromise = Promise.resolve('awesome');
   
   propertyViewSetters = new Map<string, (value)=>void>();
-  aureliaObservables = new Map<string, Rx.Observable<any>>();
-  eventObservables = new Map<string, Rx.Observable<any>>();
+  aureliaFromViewObservables = new Map<string, Rx.Observable<any>>();
+  aureliaToViewObservables = new Map<string, Rx.Observable<any>>();
+  aureliaViewValues = new Map<string, string>();
+  // eventObservables = new Map<string, Rx.Observable<any>>();
   
   constructor() {
   }
@@ -25,8 +27,7 @@ export class Welcome {
   bind() {
     console.log('bound')
     console.log('setters', this.propertyViewSetters)
-    console.log('observables', this.aureliaObservables)
-    console.log('eventObservables', this.eventObservables)
+    console.log('observables', this.aureliaFromViewObservables)
     
     const sources = { WelcomeView: makeAureliaDriver(this) }
     Cycle.run(this.cycle, sources)
@@ -62,11 +63,14 @@ export class Welcome {
 
 // this is not required:
 const _propertyViewSetters = new Map<string, (value)=>void>()
-const _aureliaObservables = new Map<string, Rx.Observable<any> & { _aureliaType: 'event' | 'property' }>()
+const _aureliaFromViewObservables = new Map<string, Rx.Observable<any> & { _aureliaType: 'event' | 'property' }>()
+const _aureliaToViewObservables = new Map<string, Rx.Observable<any>>()
+const _aureliaViewValues = new Map<string, string>()
 // const _eventObservables = new Map<string, Rx.Observable<any>>()
 
 function invokeAureliaBindingSetter(context, name: string, value: any) {
   const propertyViewSetters: typeof _propertyViewSetters = context.propertyViewSetters
+  // const aureliaToViewObservables: typeof _aureliaToViewObservables = context.aureliaToViewObservables
   
   const setter = propertyViewSetters.get(name)
   if (setter)
@@ -76,47 +80,49 @@ function invokeAureliaBindingSetter(context, name: string, value: any) {
 }
 
 function getAureliaObservableForBinding(context, name: string) {
-  const aureliaObservables: typeof _aureliaObservables = context.aureliaObservables
+  const aureliaFromViewObservables: typeof _aureliaFromViewObservables = context.aureliaFromViewObservables
   
-  return aureliaObservables.get(name)
+  return aureliaFromViewObservables.get(name)
 }
-
-// function getAureliaObservableForFunctionBinding(context, name: string) {
-//   const eventObservables: typeof _eventObservables = context.eventObservables
-
-//   return eventObservables.get(name)
-// }
-
-// function set(name, value) {
-//   return { name, value }
-// }
 
 function makeAureliaDriver(context: any) {
   const driverCreator: DriverFunction = function aureliaDriver(props$) {
-    // console.log(props$)
-    // Object.keys(props).forEach(propName => {
-    //   const prop$ = props[propName] as Observable<any>
-    //   if (prop$) {
-    //     prop$.subscribe(propValue => {
-    //       invokeAureliaBindingSetter(context, propName, propValue)
-    //     })
-    //   }
-    // })
-    props$.subscribe((propData) => { //:{ count:number }
-      // console.log('propData', propData)
+    props$.subscribe((propData) => {
       Object.keys(propData).forEach(propName => {
-        // TODO: IF CHANGED
         const newValue = propData[propName]
-        const observable = context.aureliaObservables.get(propName)
-        const previousValue = observable ? observable.last() : undefined
+        const previousValue = context.aureliaViewValues.get(propName)
+        
         if (previousValue !== newValue) {
           console.log('previous value different, setting', propName, previousValue, newValue)
           invokeAureliaBindingSetter(context, propName, newValue)
+        } else {
+          console.log('previous value equal, not setting', propName, previousValue, newValue)
         }
+        
+        // const fromViewObservable = context.aureliaFromViewObservables.get(propName)
+        // const toViewObservable = context.aureliaToViewObservables.get(propName)
+        // const valueObservable = fromViewObservable ? Observable.combineLatest(fromViewObservable, toViewObservable) : fromViewObservable
+        // const previousValueObservable = valueObservable.last()
+        // //observable ? <Observable<string>>observable.last() : Observable.of('')
+        
+        // const prevSub = previousValueObservable.subscribe(previousValue => {
+        //   if (previousValue !== newValue) {
+        //     console.log('previous value different, setting', propName, previousValue, newValue)
+        //     invokeAureliaBindingSetter(context, propName, newValue)
+        //   }
+        //   else console.log('previous value equal, not setting', propName, previousValue, newValue)
+        // }, 
+        // function (err) {
+        //   console.log('Error: %s', err);
+        // },
+        // function () {
+        //   console.log('Completed');
+        //   prevSub.unsubscribe()
+        // })
       })
     })
     // query props$ 
-    // Use props$ as instructions to fill DOM elements
+    // Use props$ as instructions to fill binding properties
     // ...
     const AureliaSource = {
       select: function select(selector) {
@@ -132,7 +138,6 @@ function makeAureliaDriver(context: any) {
       events: function events(selector) {
         const observable = getAureliaObservableForBinding(context, selector)
         return observable && observable._aureliaType === 'event' ? observable : null
-        // return getAureliaObservableForFunctionBinding(context, selector)
       },
     }
     return AureliaSource
@@ -141,38 +146,7 @@ function makeAureliaDriver(context: any) {
   return driverCreator
 }
 
-
-
-// function main({ AureliaSource }) {
-//   return {
-//     Aurelia: AureliaSource.select('someBinding').map((value) => `${value} ha!`)
-//   }
-// }
-
-// all I need is a wrapper in attached()
-// that will run:
-//    return { Aurelia: this.cycle({ AureliaSource.select(this) }) }
-// then we can:
-/*
-cycle({ AureliaSource }) {
-  return AureliaSource.property('someBinding')
-                      .map((value) => ([
-                        set(firstName, `${value} ha!`)
-                      ]))
-}
-*/
-
-const interceptMethods = ['updateTarget', 'updateSource', 'callSource'];
-// const registeredBindings = new Array<Observable<any>>()
-// const bindingEffects = new WeakMap<string, Object>()
-
-// function registerBinding(context, name, observable:Observable<any>) {
-//   registeredBindings.push(observable)
-// }
-
-// function registerBindingInContext(context, name) {
-  
-// }
+const interceptMethods = ['updateTarget', 'updateSource', 'callSource']
 
 export class InterceptBindingBehavior {
   bind(binding, scope) { // , param, param...
@@ -187,99 +161,163 @@ export class InterceptBindingBehavior {
     }
     const name = firstExpression.name
     
-    console.log('Creating binding via interception', binding)
+    console.log('Creating binding via interception', name)
     
-    // binding['observable']
-    const observable:Observable<any> = Rx.Observable.create(function (observer: Observer<any>) {
-      console.log('Creating binding observable for:', name)
+    let fromViewTriggerNewValue: (value: string|{event; arguments})=>void
+    let fromViewTriggerError: (err: Error)=>void
+    let fromViewTriggerComplete: ()=>void
+    
+    let toViewTriggerNewValue: (value: string)=>void
+    let toViewTriggerError: (err: Error)=>void
+    let toViewTriggerComplete: ()=>void
+    
+    const toViewObservable:Observable<any> = Rx.Observable.create(function (observer: Observer<any>) {
+      console.log('Creating toView binding observable for:', name)
       // Yield a single value and complete
-      binding.observableTriggerNextValue = (value) => observer.next(value)
-      binding.observableThrowError = (err) => observer.error(err)
-      binding.observableComplete = () => observer.complete()
-      
-      if (binding.observableInitialValue !== undefined) {
-        const initValue = binding.observableInitialValue
-        console.log('the initial value was seeded to the observable', name, initValue)
-        observer.next(initValue)
-      }
-      
-      // observer.next('42')
-      // observer.error(err)
-      // observer.complete()
+      toViewTriggerNewValue = (value) => observer.next(value)
+      toViewTriggerError = (err) => observer.error(err)
+      toViewTriggerComplete = () => observer.complete()
       // Any cleanup logic might go here
       return function () {
-        binding.observableTriggerNextValue = undefined
-        binding.observableThrowError = undefined
-        binding.observableComplete = undefined
-        binding.observable = undefined
-        // console.log('disposed')
+        binding.toViewObservable = undefined
+        binding.toViewObservableComplete = undefined
+        console.log('disposed of toView observable for', name)
       }
     })
-    binding.observable = observable
-    context.aureliaObservables.set(name, observable)
+
+    binding.toViewObservable = toViewObservable
+    binding.toViewObservableComplete = toViewTriggerComplete
+    context.aureliaToViewObservables.set(name, toViewObservable)
+    
+    let toViewSubscription:Rx.Subscription
     
     if (binding['updateTarget']) {
       let method = 'updateTarget'
-      binding[`intercepted-${method}`] = binding[method];
+      binding[`intercepted-${method}`] = binding[method]
+      
+      const updateBindingValueInView = binding[method].bind(binding);
+      
+      toViewSubscription = toViewObservable.subscribe(value => {
+        console.log('updating toView', name, value)
+        updateBindingValueInView(value)
+      }, error => console.error('Error in a toViewObservable', name))
+      
       // seed default value of the binding
       // this shouldn't happen more than once (?)
       // update is the "setter" for the View
-      const updateBindingValueInView = binding[method].bind(binding);
-      binding[method] = (function(value) { 
-        updateBindingValueInView(value)
-        binding.observableInitialValue = value
+      binding[method] = toViewTriggerNewValue
+      // binding[method] = (value) => {
+      //   toViewTriggerNewValue(value)
+      // }
+      
+      context.propertyViewSetters.set(name, toViewTriggerNewValue)
+      
+      // binding[method] = (function(value) { 
+      //   updateBindingValueInView(value)
+      //   binding.observableInitialValue = value
         
-        if (binding.observableTriggerNextValue !== undefined) {
-          console.log('a value was seeded to the observable', name, value)
-          binding.observableTriggerNextValue(value)
+      //   console.log('an initial value set', name, value)
+        
+      //   if (binding.observableTriggerNextValue !== undefined) {
+      //     console.log('a value was seeded to the observable', name, value)
+      //     binding.observableTriggerNextValue(value)
+      //   }
+      // }).bind(binding)
+      
+    }
+    
+    let allChanges = toViewObservable
+    
+    if (binding['updateSource'] || binding['callSource']) {
+      const fromViewObservable:Observable<any> = Observable.create(function (observer: Observer<any>) {
+        console.log('Creating fromView binding observable for:', name)
+        // Yield a single value and complete
+        fromViewTriggerNewValue = (value) => observer.next(value)
+        fromViewTriggerError = (err) => observer.error(err)
+        fromViewTriggerComplete = () => observer.complete()
+        
+        // binding.observableTriggerNextValue = (value) => observer.next(value)
+        // binding.observableThrowError = (err) => observer.error(err)
+        // binding.observableComplete = () => observer.complete()
+        
+        // if (binding.observableInitialValue !== undefined) {
+        //   const initValue = binding.observableInitialValue
+        //   console.log('the initial value was seeded to the observable', name, initValue)
+        //   observer.next(initValue)
+        // }
+        
+        // Any cleanup logic might go here
+        return function () {
+          // binding.observableTriggerNextValue = undefined
+          // binding.observableThrowError = undefined
+          // binding.observableComplete = undefined
+          binding.fromViewObservable = undefined
+          binding.fromViewObservableComplete = undefined
+          console.log('disposed of fromView observable for', name)
         }
-      }).bind(binding)
+      })
       
-      context.propertyViewSetters.set(name, updateBindingValueInView)
-    }
-    
-    // let observableTriggerNextValue
-    // let observableThrowError
-    // let observableComplete
-    
-    if (binding['updateSource']) {
-      let method = 'updateSource'
-      binding[`intercepted-${method}`] = binding[method];
-      // user input - we don't need to change the underlying ViewModel, 
-      // since we don't plan on using it
-      //
-      // we seed the value as user input to the observable 
+      binding.fromViewObservable = fromViewObservable
+      binding.fromViewObservableComplete = fromViewTriggerComplete
+      context.aureliaFromViewObservables.set(name, fromViewObservable)
       
-      // const updateBindingValueInViewModel = binding[method].bind(binding);
-      binding[method] = (function(value) {
-        console.log('you changed the value of', name, value)
-        if (binding.observableTriggerNextValue !== undefined)
-          binding.observableTriggerNextValue(value)
-      }).bind(binding)
       
-      observable['_aureliaType'] = 'property'
-    }
-    
-    if (binding['callSource']) {
-      let method = 'callSource'
-      binding[`intercepted-${method}`] = binding[method];
-      // triggers and delegates should be considered user input
-      
-      const args = firstExpression.args
-      
-      binding[method] = (function($event) {
-        // const args = this.sourceExpression.expression.args
-        let evaluatedArgs = []
-        for (let arg of args) {
-          evaluatedArgs.push(arg.evaluate(this.source, this.lookupFunctions, true))
+      if (binding['updateSource']) {
+        let method = 'updateSource'
+        binding[`intercepted-${method}`] = binding[method];
+        // user input - we don't need to change the underlying ViewModel, 
+        // since we don't plan on using it
+        //
+        // we seed the value as user input to the observable 
+        
+        // const updateBindingValueInViewModel = binding[method].bind(binding);
+        binding[method] = (value) => {
+          console.log('you changed the value of', name, value)
+          if (fromViewTriggerNewValue !== undefined)
+            fromViewTriggerNewValue(value)
         }
-        console.log('you invoked a method', name, event, evaluatedArgs)
-        if (binding.observableTriggerNextValue !== undefined)
-          binding.observableTriggerNextValue({ event, arguments: evaluatedArgs })
-      }).bind(binding)
+        
+        fromViewObservable['_aureliaType'] = 'property'
+      }
       
-      observable['_aureliaType'] = 'event'
+      if (binding['callSource']) {
+        let method = 'callSource'
+        binding[`intercepted-${method}`] = binding[method]
+        // triggers and delegates should be considered user input
+        
+        const args = firstExpression.args
+        
+        binding[method] = (function($event) {
+          // const args = this.sourceExpression.expression.args
+          let evaluatedArgs = []
+          for (let arg of args) {
+            evaluatedArgs.push(arg.evaluate(this.source, this.lookupFunctions, true))
+          }
+          // console.log('you invoked a method', name, event, evaluatedArgs)
+          if (fromViewTriggerNewValue !== undefined)
+            fromViewTriggerNewValue({ event, arguments: evaluatedArgs })
+
+        }).bind(binding)
+        
+        fromViewObservable['_aureliaType'] = 'event'
+      }
+      
+      allChanges = Observable.merge(fromViewObservable, toViewObservable)
     }
+    
+    const allChangesSubscription = 
+      binding.allChangesObservable = 
+        allChanges.subscribe(
+          (value) => {
+            console.log('a value was set', name, value)
+            context.aureliaViewValues.set(name, value)
+          }, 
+          (error) => console.error(error.message), 
+          () => {
+            console.log('completed allChangesObservable', name)
+            binding.allChangesObservable = undefined
+          }
+        )
   }
 
   unbind(binding, scope) {
@@ -292,15 +330,22 @@ export class InterceptBindingBehavior {
       binding[method] = binding[`intercepted-${method}`];
       binding[`intercepted-${method}`] = undefined;
     }
-    if (binding.observableUnsubscribe) {
-      binding.observableUnsubscribe()
+    // if (binding.observableUnsubscribe) {
+    //   binding.observableUnsubscribe()
+    // }
+    if (binding.toViewObservable) {
+      binding.toViewObservableComplete()
+      // binding.toViewObservableComplete
+      // binding['toViewObservable'] = undefined
     }
-    if (binding.observable) {
-      binding.observableTriggerNextValue = undefined
-      binding.observableThrowError = undefined
-      binding.observableComplete = undefined
-      binding['observable'] = undefined
+    if (binding.fromViewObservable) {
+      binding.fromViewObservableComplete()
+      // binding['fromViewObservable'] = undefined
     }
+      // binding.observableTriggerNextValue = undefined
+      // binding.observableThrowError = undefined
+      // binding.observableComplete = undefined
+      // binding.observableInitialValue = undefined
   }
 }
 
