@@ -1,7 +1,8 @@
 //import {computedFrom} from 'aurelia-framework';
 
-import * as Rx from '../jspm_packages/npm/rxjs@5.0.0-beta.2/Rx';
-import {Observable, Observer} from 'rxjs';
+import * as Rx from '../jspm_packages/npm/rxjs@5.0.0-beta.2/Rx'
+import {Observable, Observer} from '../jspm_packages/npm/rxjs@5.0.0-beta.2/Rx'
+// import {Observable, Observer} from 'rxjs'
 
 import Cycle from '../jspm_packages/npm/@cycle/core@7.0.0-rc1/lib/index'
 import rxjsAdapter from '../jspm_packages/npm/@cycle/rxjs-adapter@1.0.0/lib/index'
@@ -15,7 +16,7 @@ export class Welcome {
   // worldPromise = Promise.resolve('awesome');
   
   propertyViewSetters = new Map<string, (value)=>void>();
-  propertyObservables = new Map<string, Rx.Observable<any>>();
+  aureliaObservables = new Map<string, Rx.Observable<any>>();
   eventObservables = new Map<string, Rx.Observable<any>>();
   
   constructor() {
@@ -24,7 +25,7 @@ export class Welcome {
   bind() {
     console.log('bound')
     console.log('setters', this.propertyViewSetters)
-    console.log('observables', this.propertyObservables)
+    console.log('observables', this.aureliaObservables)
     console.log('eventObservables', this.eventObservables)
     
     const sources = { WelcomeView: makeAureliaDriver(this) }
@@ -35,7 +36,7 @@ export class Welcome {
   cycle({ WelcomeView }:{WelcomeView:{ select:(selector)=>Observable<any>, events:(selector)=>Observable<any> }}) {
     const add$ = WelcomeView
       .events('add_click')
-      .do(ev => console.log(ev))
+      // .do(ev => console.log(ev))
       .map(ev => 1)
 
     const count$ = add$
@@ -44,23 +45,25 @@ export class Welcome {
 
     const name$ = WelcomeView
       .select('firstName')
+      .startWith('')
       .map(input => `${input} awesome`)
-      .do(ev => console.log(ev))
+      // .do(ev => console.log(ev))
+
+    // console.log(count$)
 
     return {
-      WelcomeView: count$.map(count =>
-        ({
-          count
-        })
+      WelcomeView: Observable.combineLatest(
+        count$, name$,
+        (count, name) => ({ countText: `${count} : ${name}` })
       )
-    };
+    }
   }
 }
 
 // this is not required:
 const _propertyViewSetters = new Map<string, (value)=>void>()
-const _propertyObservables = new Map<string, Rx.Observable<any>>()
-const _eventObservables = new Map<string, Rx.Observable<any>>()
+const _aureliaObservables = new Map<string, Rx.Observable<any> & { _aureliaType: 'event' | 'property' }>()
+// const _eventObservables = new Map<string, Rx.Observable<any>>()
 
 function invokeAureliaBindingSetter(context, name: string, value: any) {
   const propertyViewSetters: typeof _propertyViewSetters = context.propertyViewSetters
@@ -72,40 +75,53 @@ function invokeAureliaBindingSetter(context, name: string, value: any) {
     console.log('error, this binding is not two-way')
 }
 
-function getAureliaObservableForPropertyBinding(context, name: string) {
-  const propertyObservables: typeof _propertyObservables = context.propertyObservables
+function getAureliaObservableForBinding(context, name: string) {
+  const aureliaObservables: typeof _aureliaObservables = context.aureliaObservables
   
-  return propertyObservables.get(name)
+  return aureliaObservables.get(name)
 }
 
-function getAureliaObservableForFunctionBinding(context, name: string) {
-  const eventObservables: typeof _eventObservables = context.eventObservables
+// function getAureliaObservableForFunctionBinding(context, name: string) {
+//   const eventObservables: typeof _eventObservables = context.eventObservables
 
-  return eventObservables.get(name)
-}
+//   return eventObservables.get(name)
+// }
 
 // function set(name, value) {
 //   return { name, value }
 // }
 
-function makeAureliaDriver(context: Object) {
-  const driverCreator: DriverFunction = function aureliaDriver(props$: Observable<any>) {
-    props$.subscribe((propData:{ count:number }) => {
-      _.keys(propData).forEach(propName => {
+function makeAureliaDriver(context: any) {
+  const driverCreator: DriverFunction = function aureliaDriver(props$) {
+    // console.log(props$)
+    // Object.keys(props).forEach(propName => {
+    //   const prop$ = props[propName] as Observable<any>
+    //   if (prop$) {
+    //     prop$.subscribe(propValue => {
+    //       invokeAureliaBindingSetter(context, propName, propValue)
+    //     })
+    //   }
+    // })
+    props$.subscribe((propData) => { //:{ count:number }
+      // console.log('propData', propData)
+      Object.keys(propData).forEach(propName => {
         // TODO: IF CHANGED
-        invokeAureliaBindingSetter(context, propName, propData[propName])
+        const newValue = propData[propName]
+        const observable = context.aureliaObservables.get(propName)
+        const previousValue = observable ? observable.last() : undefined
+        if (previousValue !== newValue) {
+          console.log('previous value different, setting', propName, previousValue, newValue)
+          invokeAureliaBindingSetter(context, propName, newValue)
+        }
       })
-      // propData
-      // propData.forEach((prop) => {
-      //   invokeAureliaBindingSetter(prop.name, prop.value)
-      // })
     })
     // query props$ 
     // Use props$ as instructions to fill DOM elements
     // ...
     const AureliaSource = {
       select: function select(selector) {
-        return getAureliaObservableForPropertyBinding(context, selector)
+        const observable = getAureliaObservableForBinding(context, selector)
+        return observable && observable._aureliaType === 'property' ? observable : null
         // returns an object with two fields: `observable`
         // and `events()`. The former, `observable`, is the
         // Observable of DOM elements matching the given
@@ -114,7 +130,9 @@ function makeAureliaDriver(context: Object) {
         // on the elements matched by `selector`.
       },
       events: function events(selector) {
-        return getAureliaObservableForFunctionBinding(context, selector)
+        const observable = getAureliaObservableForBinding(context, selector)
+        return observable && observable._aureliaType === 'event' ? observable : null
+        // return getAureliaObservableForFunctionBinding(context, selector)
       },
     }
     return AureliaSource
@@ -173,11 +191,18 @@ export class InterceptBindingBehavior {
     
     // binding['observable']
     const observable:Observable<any> = Rx.Observable.create(function (observer: Observer<any>) {
-      console.log('Creating binding observable', binding)
+      console.log('Creating binding observable for:', name)
       // Yield a single value and complete
       binding.observableTriggerNextValue = (value) => observer.next(value)
       binding.observableThrowError = (err) => observer.error(err)
       binding.observableComplete = () => observer.complete()
+      
+      if (binding.observableInitialValue !== undefined) {
+        const initValue = binding.observableInitialValue
+        console.log('the initial value was seeded to the observable', name, initValue)
+        observer.next(initValue)
+      }
+      
       // observer.next('42')
       // observer.error(err)
       // observer.complete()
@@ -186,11 +211,12 @@ export class InterceptBindingBehavior {
         binding.observableTriggerNextValue = undefined
         binding.observableThrowError = undefined
         binding.observableComplete = undefined
-        binding['observable'] = undefined
+        binding.observable = undefined
         // console.log('disposed')
       }
     })
     binding.observable = observable
+    context.aureliaObservables.set(name, observable)
     
     if (binding['updateTarget']) {
       let method = 'updateTarget'
@@ -201,9 +227,12 @@ export class InterceptBindingBehavior {
       const updateBindingValueInView = binding[method].bind(binding);
       binding[method] = (function(value) { 
         updateBindingValueInView(value)
-        console.log('the initial value was seeded for the observable', name, value)
-        // if (binding.observableTriggerNextValue !== undefined)
-        //   binding.observableTriggerNextValue(value)
+        binding.observableInitialValue = value
+        
+        if (binding.observableTriggerNextValue !== undefined) {
+          console.log('a value was seeded to the observable', name, value)
+          binding.observableTriggerNextValue(value)
+        }
       }).bind(binding)
       
       context.propertyViewSetters.set(name, updateBindingValueInView)
@@ -228,7 +257,7 @@ export class InterceptBindingBehavior {
           binding.observableTriggerNextValue(value)
       }).bind(binding)
       
-      context.propertyObservables.set(name, observable)
+      observable['_aureliaType'] = 'property'
     }
     
     if (binding['callSource']) {
@@ -249,9 +278,8 @@ export class InterceptBindingBehavior {
           binding.observableTriggerNextValue({ event, arguments: evaluatedArgs })
       }).bind(binding)
       
-      context.eventObservables.set(name, observable)
+      observable['_aureliaType'] = 'event'
     }
-    // registerBinding(context, name, observable)
   }
 
   unbind(binding, scope) {
