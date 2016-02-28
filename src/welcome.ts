@@ -163,29 +163,20 @@ export class InterceptBindingBehavior {
     
     console.log('Creating binding via interception', name)
     
-    // let toViewTriggerNewValue: (value: string)=>void
-    // let toViewTriggerError: (err: Error)=>void
-    // let toViewTriggerComplete: ()=>void
     let toViewObservers = new Set<Observer<string>>()
     
     const toViewObservable:Observable<any> = Rx.Observable.create(function (observer: Observer<any>) {
       console.log('Creating toView binding observable for:', name)
       // Yield a single value and complete
-      // toViewTriggerNewValue = (value) => observer.next(value)
-      // toViewTriggerError = (err) => observer.error(err)
-      // toViewTriggerComplete = () => observer.complete()
       toViewObservers.add(observer)
       // Any cleanup logic might go here
       return function () {
-        // binding.toViewObservable = undefined
-        // binding.toViewObservableComplete = undefined
         console.log('disposed of toView observable for', name)
         toViewObservers.delete(observer)        
       }
     })
 
     binding.toViewObservable = toViewObservable
-    // binding.toViewObservableComplete = toViewTriggerComplete
     binding.toViewObservers = toViewObservers
     context.aureliaToViewObservables.set(name, toViewObservable)
     
@@ -209,55 +200,27 @@ export class InterceptBindingBehavior {
       // seed default value of the binding
       // this shouldn't happen more than once (?)
       // update is the "setter" for the View
-      binding[method] = toViewObserversNextAll
-      // binding[method] = (value) => {
-      //   toViewObservers.forEach(observer => observer.next(value))
-      // }
+      // binding[method] = toViewObserversNextAll
+      binding[method] = (value) => {
+        console.log('an initial value was seeded to the observable', name, value)
+        toViewObserversNextAll(value)
+        // toViewObservers.forEach(observer => observer.next(value))
+      }
       
       context.propertyViewSetters.set(name, toViewObserversNextAll)
-      
-      // binding[method] = (function(value) { 
-      //   updateBindingValueInView(value)
-      //   binding.observableInitialValue = value
-        
-      //   console.log('an initial value set', name, value)
-        
-      //   if (binding.observableTriggerNextValue !== undefined) {
-      //     console.log('a value was seeded to the observable', name, value)
-      //     binding.observableTriggerNextValue(value)
-      //   }
-      // }).bind(binding)
     }
     
     let allChanges = toViewObservable
     
     if (binding['updateSource'] || binding['callSource']) {
-      // let fromViewTriggerNewValue: (value: string|{event; arguments})=>void
-      // let fromViewTriggerError: (err: Error)=>void
-      // let fromViewTriggerComplete: ()=>void
-      
-      // let fromViewObservers = new Array<{next:(value: string|{event; arguments})=>void, error: (err: Error)=>void; complete: ()=>void}>()
       let fromViewObservers = new Set<Observer<string|{event; arguments}>>()
       
       const fromViewObservable:Observable<any> = Observable.create(function (observer: Observer<any>) {
         console.log('Creating fromView binding observable for:', name)
         // Yield a single value and complete
         fromViewObservers.add(observer)
-        
-        // fromViewTriggerNewValue = (value) => observer.next(value)
-        // fromViewTriggerError = (err) => observer.error(err)
-        // fromViewTriggerComplete = () => observer.complete()
-        
-        // if (binding.observableInitialValue !== undefined) {
-        //   const initValue = binding.observableInitialValue
-        //   console.log('the initial value was seeded to the observable', name, initValue)
-        //   observer.next(initValue)
-        // }
-        
         // Any cleanup logic might go here
         return function () {
-          // binding.fromViewObservable = undefined
-          // binding.fromViewObservableComplete = undefined
           console.log('disposed of fromView observable for', name)
           fromViewObservers.delete(observer)
         }
@@ -265,7 +228,6 @@ export class InterceptBindingBehavior {
       
       binding.fromViewObservable = fromViewObservable
       binding.fromViewObservers = fromViewObservers
-      // binding.fromViewObservableComplete = fromViewTriggerComplete
       context.aureliaFromViewObservables.set(name, fromViewObservable)
       
       if (binding['updateSource']) {
@@ -276,12 +238,9 @@ export class InterceptBindingBehavior {
         //
         // we seed the value as user input to the observable 
         
-        // const updateBindingValueInViewModel = binding[method].bind(binding);
         binding[method] = (value) => {
           // console.log('you changed the value of', name, value)
           fromViewObservers.forEach(observer => observer.next(value))
-          // if (fromViewTriggerNewValue !== undefined)
-          //   fromViewTriggerNewValue(value)
         }
         
         fromViewObservable['_aureliaType'] = 'property'
@@ -295,15 +254,12 @@ export class InterceptBindingBehavior {
         const args = firstExpression.args
         
         binding[method] = ($event) => {
-          // const args = this.sourceExpression.expression.args
           let evaluatedArgs = []
           for (let arg of args) {
             evaluatedArgs.push(arg.evaluate(binding.source, binding.lookupFunctions, true))
           }
           // console.log('you invoked a method', name, event, evaluatedArgs)
           fromViewObservers.forEach(observer => observer.next({ event, arguments: evaluatedArgs }))          
-          // if (fromViewTriggerNewValue !== undefined)
-          //   fromViewTriggerNewValue({ event, arguments: evaluatedArgs })
         }
         
         fromViewObservable['_aureliaType'] = 'event'
@@ -337,24 +293,16 @@ export class InterceptBindingBehavior {
       binding[method] = binding[`intercepted-${method}`];
       binding[`intercepted-${method}`] = undefined;
     }
-    // if (binding.observableUnsubscribe) {
-    //   binding.observableUnsubscribe()
-    // }
     if (binding.toViewObservable) {
       binding.toViewObservers.forEach(observer => observer.complete())
-      // binding.toViewObservableComplete()
-      // binding.toViewObservableComplete
-      // binding['toViewObservable'] = undefined
+      binding.toViewObservers = undefined
+      binding.toViewObservable = undefined
     }
     if (binding.fromViewObservable) {
       binding.fromViewObservers.forEach(observer => observer.complete())
-      // binding.fromViewObservableComplete()
-      // binding['fromViewObservable'] = undefined
+      binding.fromViewObservers = undefined
+      binding.fromViewObservable = undefined
     }
-      // binding.observableTriggerNextValue = undefined
-      // binding.observableThrowError = undefined
-      // binding.observableComplete = undefined
-      // binding.observableInitialValue = undefined
   }
 }
 
