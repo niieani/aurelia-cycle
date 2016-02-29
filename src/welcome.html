@@ -1,11 +1,12 @@
 <template>
+  <require from="./counter"></require>
   <section class="au-animate">
-    <h2>${countText || '0' & intercept}</h2>
+    <h2>${countText & intercept} ${mouseX & intercept} ${counterValue & intercept}</h2>
     <!--<div>${someBinding || 'nothing' & intercept: myFunc}</div>-->
     <form role="form" submit.delegate="add_click() & intercept">
       <div class="form-group">
         <label for="fn">First Name</label>
-        <input type="text" value.bind="firstName & intercept & debounce: 800" class="form-control" id="fn" placeholder="first name">
+        <input type="text" value.bind="firstName || 'Mike' & intercept & debounce: 100" class="form-control" id="fn" placeholder="first name">
       </div>
       <!--<div class="form-group">
         <label for="fn">First Name</label>
@@ -17,5 +18,6 @@
       </div>-->
       <button type="submit" class="btn btn-default">Submit</button>
     </form>
+    <counter label.bind="counterLabel & intercept"></counter>
   </section>
 </template>

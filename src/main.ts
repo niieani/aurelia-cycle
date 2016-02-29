@@ -1,5 +1,6 @@
 import 'bootstrap';
 import {Aurelia} from 'aurelia-framework';
+import {InterceptBindingBehavior} from './aurelia-cycle'
 
 export function configure(aurelia: Aurelia) {
   aurelia.use
@@ -14,5 +15,9 @@ export function configure(aurelia: Aurelia) {
   //Anyone wanting to use HTMLImports to load views, will need to install the following plugin.
   //aurelia.use.plugin('aurelia-html-import-template-loader')
 
+  // aurelia.enhance()
+  // aurelia.globalResources('./aurelia-cycle');
+  
+  aurelia.resources.registerBindingBehavior('intercept', new InterceptBindingBehavior())
   aurelia.start().then(() => aurelia.setRoot());
 }

@@ -1,0 +1,9 @@
+<template>
+  <div class="labeled-slider">
+    <span class="label">
+      ${label} 
+      <!--${value & intercept} ${unit & intercept}-->
+    </span>
+    <input type="range" min.bind="min & intercept" max.bind="max & intercept" value.bind="value & intercept">
+  </div>
+</template>
