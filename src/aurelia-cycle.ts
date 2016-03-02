@@ -12,6 +12,18 @@ class AureliaCycle {
 }
 
 /**
+* Decorator: Specifies the dependencies that should be injected by the DI Container into the decoratored class/function.
+*/
+export function cycle(potentialTarget?: any): any {
+  let deco = function(target) {
+    console.log('cycle decorator', target)
+    // target.inject = metadata.getOwn(metadata.paramTypes, target) || _emptyParameters;
+  }
+
+  return potentialTarget ? deco(potentialTarget) : deco;
+}
+
+/**
  * we need to build a tree for the in/out of the cycle
  * it's not a dom tree, but a data tree
  * 
@@ -72,14 +84,8 @@ export function makeAureliaDriver(context: any) {
       select: function select(selector) {
         const observable = getAureliaObservableForBinding(context, selector)
         return observable && observable._aureliaType === 'property' ? observable : null
-        // returns an object with two fields: `observable`
-        // and `events()`. The former, `observable`, is the
-        // Observable of DOM elements matching the given
-        // `selector`. Function `events(eventType)` returns
-        // the Observable of `eventType` DOM events happening
-        // on the elements matched by `selector`.
       },
-      events: function events(selector) {
+      actions: function actions(selector) {
         const observable = getAureliaObservableForBinding(context, selector)
         return observable && observable._aureliaType === 'event' ? observable : null
       },
@@ -87,6 +93,20 @@ export function makeAureliaDriver(context: any) {
     return AureliaSource
   }
   driverCreator.streamAdapter = rxjsAdapter
+  
+  // aurelia specific
+  if (!context.propertyViewSetters)
+    context.propertyViewSetters = new Map<string, (value)=>void>();
+  if (!context.aureliaFromViewObservables)
+    context.aureliaFromViewObservables = new Map<string, Observable<any>>();
+  if (!context.aureliaToViewObservables)
+    context.aureliaToViewObservables = new Map<string, Observable<any>>();
+  if (!context.aureliaViewValues)
+    context.aureliaViewValues = new Map<string, string>();
+  
+  if (!context.cycleStarted || !context.cycleStartedResolve)
+    context.cycleStarted = new Promise<void>((resolve) => context.cycleStartedResolve = resolve);
+  
   return driverCreator
 }
 
@@ -99,7 +119,7 @@ export class InterceptBindingBehavior {
     const expression = binding.sourceExpression.expression
     let firstExpression = expression.expression || expression
     
-    let maxNesting = 10
+    const maxNesting = 10
     while (!firstExpression.name && maxNesting--) {
       firstExpression = firstExpression.left
     }
@@ -109,7 +129,7 @@ export class InterceptBindingBehavior {
     
     // TODO: don't create toView when 'callSource' type
     
-    let toViewObservers = new Set<Observer<string>>()
+    const toViewObservers = new Set<Observer<string>>()
     
     const toViewObservable:Observable<any> = Observable.create(function (observer: Observer<any>) {
       console.log('Creating toView binding observable for:', name)

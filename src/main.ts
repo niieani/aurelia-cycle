@@ -6,7 +6,7 @@ export function configure(aurelia: Aurelia) {
   aurelia.use
     .standardConfiguration()
     .developmentLogging()
-    // .plugin('./dist/cycle-plugin/index');
+    .plugin('./dist/cycle-plugin/index');
     // .plugin('aurelia-async');
 
   //Uncomment the line below to enable animation.
