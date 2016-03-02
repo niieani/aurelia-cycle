@@ -1,5 +1,5 @@
-import {Observable, Observer, Subscription} from '../jspm_packages/npm/rxjs@5.0.0-beta.2/Rx'
-import {makeAureliaDriver, ViewSource} from './cycle-plugin/index'
+import {Observable} from 'rxjs/Rx'
+import {makeAureliaDriver, ViewSource} from '../index'
 
 export class Welcome {
   // cycleDrivers = { WelcomeView: makeAureliaDriver(this) }

@@ -25,7 +25,7 @@ System.config({
     "aurelia-templating-resources": "npm:aurelia-templating-resources@1.0.0-beta.1.1.2",
     "aurelia-templating-router": "npm:aurelia-templating-router@1.0.0-beta.1.1.2",
     "bootstrap": "github:twbs/bootstrap@3.3.6",
-    "core-js": "npm:core-js@2.1.0",
+    "core-js": "npm:core-js@2.1.3",
     "fetch": "github:github/fetch@0.10.1",
     "font-awesome": "npm:font-awesome@4.5.0",
     "lodash": "npm:lodash@4.5.1",
@@ -47,7 +47,7 @@ System.config({
       "util": "npm:util@0.10.3"
     },
     "github:twbs/bootstrap@3.3.6": {
-      "jquery": "github:components/jquery@2.2.0"
+      "jquery": "github:components/jquery@2.2.1"
     },
     "npm:@cycle/core@7.0.0-rc1": {
       "@cycle/base": "npm:@cycle/base@1.2.2",
@@ -194,7 +194,7 @@ System.config({
       "isarray": "npm:isarray@1.0.0",
       "process": "github:jspm/nodelibs-process@0.1.2"
     },
-    "npm:core-js@2.1.0": {
+    "npm:core-js@2.1.3": {
       "fs": "github:jspm/nodelibs-fs@0.1.2",
       "path": "github:jspm/nodelibs-path@0.1.0",
       "process": "github:jspm/nodelibs-process@0.1.2",

@@ -1,23 +1,81 @@
-import {Observable, Observer, Subscription} from '../jspm_packages/npm/rxjs@5.0.0-beta.2/Rx'
-import Cycle from '../jspm_packages/npm/@cycle/core@7.0.0-rc1/lib/index'
-import rxjsAdapter from '../jspm_packages/npm/@cycle/rxjs-adapter@1.0.0/lib/index'
-import { DriverFunction } from '../jspm_packages/npm/@cycle/base@1.2.2/lib/index'
-import * as TheLogManager from 'aurelia-logging';
-const logger = TheLogManager.getLogger('aurelia-cycle');
+import {View} from 'aurelia-templating';
+// import {Controller, HtmlBehaviorResource, BehaviorInstruction, View} from 'aurelia-templating';
+// import {Observable, Observer, Subscription} from '../jspm_packages/npm/rxjs@5.0.0-beta.2/Rx'
+// import Cycle from '../jspm_packages/npm/@cycle/core@7.0.0-rc1/lib/index'
+// import rxjsAdapter from '../jspm_packages/npm/@cycle/rxjs-adapter@1.0.0/lib/index'
+// import { DriverFunction } from '../jspm_packages/npm/@cycle/base@1.2.2/lib/index'
+import {Observable, Observer, Subscription} from 'rxjs/Rx'
+import Cycle from '@cycle/core/lib/index'
+import rxjsAdapter from '@cycle/rxjs-adapter/lib/index'
+import { DriverFunction } from '@cycle/base'
+
+import * as TheLogManager from 'aurelia-logging'
+
+const logger = TheLogManager.getLogger('aurelia-cycle')
+
+export function configure(frameworkConfig) {
+  const bindingBehaviorInstance = frameworkConfig.container.get(CycleBindingBehavior)
+  frameworkConfig.aurelia.resources.registerBindingBehavior('cycle', bindingBehaviorInstance) //new CycleBindingBehavior()
+  
+  const originalBind:(scope)=>void = View.prototype.bind
+  
+  View.prototype.bind = function bind(context: any, overrideContext?: Object, _systemUpdate?: boolean): void {
+    originalBind.apply(this, arguments)
+    
+    if (context && typeof context.cycle == 'function') {
+      function getDefaultSources() {
+        return { [context.constructor.name + 'View']: makeAureliaDriver(context) }
+      }
+      
+      // console.log('sources', context, context.cycleDrivers, scope)
+      let sources = context.cycleDrivers
+      // logger.debug('starting post-binding for cycle hook', sources, typeof sources, context.constructor.name + 'View', context.constructor.name + 'View' in sources)
+      
+      if (sources && typeof sources == 'object') {
+        if (!(context.constructor.name + 'View' in sources))
+          Object.assign(sources, getDefaultSources())
+        // logger.debug('using preset sources', sources)
+      } else {
+        // logger.debug('using default sources', sources)
+        sources = getDefaultSources()
+      }
+      // const sources = context.cycleDrivers || { [context.constructor.name + 'View']: makeAureliaDriver(context) }
+      
+      Cycle.run(context.cycle.bind(context), sources)
+      // seed initial values:
+      context.cycleStartedResolve()
+      // logger.debug('started post-binding for cycle hook', context)
+    }
+  }
+  
+  /*
+  const originalEnsurePropertiesDefined = HtmlBehaviorResource.prototype._ensurePropertiesDefined
+  HtmlBehaviorResource.prototype._ensurePropertiesDefined = function _ensurePropertiesDefined(instance: Object, lookup: Object) {
+    logger.debug('HtmlBehaviorResource', instance, lookup, this, this.properties)
+    originalEnsurePropertiesDefined.apply(this, arguments)    
+  }
+  */
+}
 
 export type PropertyViewSetterMap = Map<string, (value)=>void>;
-export type ViewObservable = Rx.Observable<any>;
-export type FromViewObservable = ViewObservable & { _aureliaType: 'event' | 'property' };
+export type ViewObservable = Observable<string | number>;
+
+export type FromViewActionObservable = Observable<Action> & { _aureliaType: 'action' | 'property' };
+export type FromViewValueObservable = ViewObservable & { _aureliaType: 'action' | 'property' };
+
+export type FromViewObservable = FromViewActionObservable | FromViewValueObservable;
 export type FromViewObservableMap = Map<string, FromViewObservable>;
 export type ViewObservableMap = Map<string, ViewObservable>;
-export type ViewValues = Map<string, string>;
+export type ViewValues = Map<string, string | number>;
+export type Action = { event: Event, arguments: Array<any> };
+export type ViewSource = { values: (bindingName: string) => FromViewValueObservable, actions: (bindingName: string) => FromViewActionObservable };
 
 function invokeAureliaBindingSetter(context: any, name: string, value: string) {
   const previousValue = context.aureliaViewValues.get(name)
   
   if (previousValue !== value) {
     // previous value different 
-    logger.debug(`setting ${name}: from '${previousValue}' to '${value}'`)
+    // logger.debug(`setting ${name}: from '${previousValue}' to '${value}'`)
     
     // TODO: instead of always setting the binding value, 
     // we should intelligently compare to see if it's an array or map or set
@@ -44,11 +102,10 @@ function getAureliaObservableForBinding(context: any, name: string) {
   let fromView = aureliaFromViewObservables.get(name)
   let toView = aureliaToViewObservables.get(name)
   
-  const returnObservable: FromViewObservable = toView && fromView ? Observable.merge(<ViewObservable> fromView, toView) : toView || fromView
+  const returnObservable: FromViewObservable = toView && fromView ? Observable.merge<FromViewObservable, FromViewObservable>(fromView, toView) : toView as any || fromView
   
   returnObservable._aureliaType = fromView ? fromView._aureliaType : 'property'
   return returnObservable
-  // return fromView
 }
 
 /**
@@ -67,16 +124,16 @@ export function makeAureliaDriver(context: any) {
     })
     
     const AureliaSource = {
-      select: function select(selector: string) {
-        const observable = getAureliaObservableForBinding(context, selector)
+      values: function values(bindingName: string) {
+        const observable = getAureliaObservableForBinding(context, bindingName)
         if (!observable || observable._aureliaType != 'property')
-          throw new Error(`Cannot select an unexistent binding ${selector}`)
+          throw new Error(`Cannot select an unexistent binding ${bindingName}`)
         return observable
       },
-      actions: function actions(selector: string) {
-        const observable = getAureliaObservableForBinding(context, selector)
-        if (!observable || observable._aureliaType != 'event')
-          throw new Error(`Cannot select an unexistent binding ${selector}`)
+      actions: function actions(bindingName: string) {
+        const observable = getAureliaObservableForBinding(context, bindingName)
+        if (!observable || observable._aureliaType != 'action')
+          throw new Error(`Cannot select an unexistent binding ${bindingName}`)
         return observable
       },
     }
@@ -106,7 +163,7 @@ export function makeAureliaDriver(context: any) {
 
 const interceptMethods = ['updateTarget', 'updateSource', 'callSource']
 
-export class InterceptBindingBehavior {
+export class CycleBindingBehavior {
   bind(binding, scope) { // , param, param...
     const context = scope.overrideContext.bindingContext // == Welcome
     
@@ -145,7 +202,7 @@ export class InterceptBindingBehavior {
     
     if (binding['updateTarget']) {
       let method = 'updateTarget'
-      binding[`intercepted-${method}`] = binding[method]
+      binding[`cycle-intercepted-${method}`] = binding[method]
       
       const updateBindingValueInView = binding[method].bind(binding);
       
@@ -198,7 +255,7 @@ export class InterceptBindingBehavior {
       
       if (binding['updateSource']) {
         let method = 'updateSource'
-        binding[`intercepted-${method}`] = binding[method];
+        binding[`cycle-intercepted-${method}`] = binding[method];
         // user input - we don't need to change the underlying ViewModel, 
         // since we don't plan on using it
         //
@@ -215,7 +272,7 @@ export class InterceptBindingBehavior {
       
       if (binding['callSource']) {
         let method = 'callSource'
-        binding[`intercepted-${method}`] = binding[method]
+        binding[`cycle-intercepted-${method}`] = binding[method]
         // triggers and delegates should be considered user input
         
         const args = firstExpression.args
@@ -229,7 +286,7 @@ export class InterceptBindingBehavior {
           fromViewObservers.forEach(observer => observer.next({ event, arguments: evaluatedArgs }))          
         }
         
-        fromViewObservable['_aureliaType'] = 'event'
+        fromViewObservable['_aureliaType'] = 'action'
       }
     }
     
@@ -256,8 +313,8 @@ export class InterceptBindingBehavior {
       if (!binding[method]) {
         continue;
       }
-      binding[method] = binding[`intercepted-${method}`];
-      binding[`intercepted-${method}`] = undefined;
+      binding[method] = binding[`cycle-intercepted-${method}`];
+      binding[`cycle-intercepted-${method}`] = undefined;
     }
     if (binding.toViewObservable) {
       binding.toViewObservers.forEach(observer => observer.complete())
@@ -274,13 +331,15 @@ export class InterceptBindingBehavior {
 
 
 /**
-* Decorator: Specifies the dependencies that should be injected by the DI Container into the decoratored class/function.
+* Decorator: Specifies that Cycle should used in the decoratored ViewModel.
+* [NOT USED AT THIS TIME]
 */
 export function cycle(potentialTarget?: any): any {
   let deco = function(target) {
     console.log('cycle decorator', target)
-    // target.inject = metadata.getOwn(metadata.paramTypes, target) || _emptyParameters;
+    target.useCycle = true
   }
 
   return potentialTarget ? deco(potentialTarget) : deco;
 }
+

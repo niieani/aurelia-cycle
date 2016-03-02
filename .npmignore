@@ -1,3 +1,9 @@
 jspm_packages
 bower_components
 .idea
+.vscode
+build
+example
+styles
+test
+typings

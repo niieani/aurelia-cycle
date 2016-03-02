@@ -1,6 +1,5 @@
-import {Observable, Observer, Subscription} from '../jspm_packages/npm/rxjs@5.0.0-beta.2/Rx'
-import Cycle from '../jspm_packages/npm/@cycle/core@7.0.0-rc1/lib/index'
-import {makeAureliaDriver, ViewSource} from './cycle-plugin/index'
+import {Observable} from 'rxjs/Rx'
+import {makeAureliaDriver, ViewSource} from '../index'
 
 import {autoinject, bindable} from 'aurelia-framework'
 import {Welcome} from './welcome'
