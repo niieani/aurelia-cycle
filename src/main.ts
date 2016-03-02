@@ -18,6 +18,6 @@ export function configure(aurelia: Aurelia) {
   // aurelia.enhance()
   // aurelia.globalResources('./aurelia-cycle');
   
-  aurelia.resources.registerBindingBehavior('intercept', new InterceptBindingBehavior())
+  // aurelia.resources.registerBindingBehavior('intercept', new InterceptBindingBehavior())
   aurelia.start().then(() => aurelia.setRoot());
 }

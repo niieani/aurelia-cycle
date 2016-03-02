@@ -2,110 +2,104 @@ import {Observable, Observer, Subscription} from '../jspm_packages/npm/rxjs@5.0.
 import Cycle from '../jspm_packages/npm/@cycle/core@7.0.0-rc1/lib/index'
 import rxjsAdapter from '../jspm_packages/npm/@cycle/rxjs-adapter@1.0.0/lib/index'
 import { DriverFunction } from '../jspm_packages/npm/@cycle/base@1.2.2/lib/index'
+import * as TheLogManager from 'aurelia-logging';
+const logger = TheLogManager.getLogger('aurelia-cycle');
 
-// this is not required:
-class AureliaCycle {
-  static _propertyViewSetters: Map<string, (value)=>void>;
-  static _aureliaFromViewObservables: Map<string, Rx.Observable<any> & { _aureliaType: 'event' | 'property' }>;
-  static _aureliaToViewObservables: Map<string, Rx.Observable<any>>;
-  static _aureliaViewValues: Map<string, string>;
-}
+export type PropertyViewSetterMap = Map<string, (value)=>void>;
+export type ViewObservable = Rx.Observable<any>;
+export type FromViewObservable = ViewObservable & { _aureliaType: 'event' | 'property' };
+export type FromViewObservableMap = Map<string, FromViewObservable>;
+export type ViewObservableMap = Map<string, ViewObservable>;
+export type ViewValues = Map<string, string>;
 
-/**
-* Decorator: Specifies the dependencies that should be injected by the DI Container into the decoratored class/function.
-*/
-export function cycle(potentialTarget?: any): any {
-  let deco = function(target) {
-    console.log('cycle decorator', target)
-    // target.inject = metadata.getOwn(metadata.paramTypes, target) || _emptyParameters;
-  }
-
-  return potentialTarget ? deco(potentialTarget) : deco;
-}
-
-/**
- * we need to build a tree for the in/out of the cycle
- * it's not a dom tree, but a data tree
- * 
- */
-
-function invokeAureliaBindingSetter(context, name: string, value: any) {
-  const propertyViewSetters: typeof AureliaCycle._propertyViewSetters = context.propertyViewSetters
-  // const aureliaToViewObservables: typeof AureliaCycle._aureliaToViewObservables = context.aureliaToViewObservables
+function invokeAureliaBindingSetter(context: any, name: string, value: string) {
+  const previousValue = context.aureliaViewValues.get(name)
   
-  const setter = propertyViewSetters.get(name)
-  // const setter = aureliaToViewObservables.get(name)
-  if (setter)
-    // setter.next(value)
-    setter(value)
-  else
-    console.log('error, this binding is not two-way')
+  if (previousValue !== value) {
+    // previous value different 
+    logger.debug(`setting ${name}: from '${previousValue}' to '${value}'`)
+    
+    // TODO: instead of always setting the binding value, 
+    // we should intelligently compare to see if it's an array or map or set
+    // and mutate accordingly to make use of Aurelia's diffing algos
+    
+    const propertyViewSetters: PropertyViewSetterMap = context.propertyViewSetters
+    // const aureliaToViewObservables: ViewObservables = context.aureliaToViewObservables
+    
+    const setter = propertyViewSetters.get(name)
+    if (setter)
+      setter(value)
+    else
+      logger.error(`the binding (${name}) is not a two-way binding and you cannot set it!`)
+  }
+  // else {
+  //   logger.debug('previous value equal, not setting', propName, previousValue, newValue)
+  // }
 }
 
-function getAureliaObservableForBinding(context, name: string) {
-  const aureliaFromViewObservables: typeof AureliaCycle._aureliaFromViewObservables = context.aureliaFromViewObservables
-  const aureliaToViewObservables: typeof AureliaCycle._aureliaToViewObservables = context.aureliaToViewObservables
+function getAureliaObservableForBinding(context: any, name: string) {
+  const aureliaFromViewObservables: FromViewObservableMap = context.aureliaFromViewObservables
+  const aureliaToViewObservables: ViewObservableMap = context.aureliaToViewObservables
   
   let fromView = aureliaFromViewObservables.get(name)
   let toView = aureliaToViewObservables.get(name)
   
-  // console.log('toView', toView, 'fromView', fromView, 'merged', Observable.merge(fromView, toView))
-  const returnObservable: typeof AureliaCycle._aureliaFromViewObservables = toView && fromView ? Observable.merge(fromView, toView) : toView || fromView
-  // const returnObservable: typeof AureliaCycle._aureliaFromViewObservables = toView ? Observable.merge(fromView, toView) : fromView
+  const returnObservable: FromViewObservable = toView && fromView ? Observable.merge(<ViewObservable> fromView, toView) : toView || fromView
+  
   returnObservable._aureliaType = fromView ? fromView._aureliaType : 'property'
   return returnObservable
   // return fromView
 }
 
+/**
+ * we need to build a tree for the in/out of the cycle
+ * it's not a dom tree, but a data tree
+ */
 export function makeAureliaDriver(context: any) {
-  console.log('requested to make aurelia driver for', context)
+  // logger.debug('requested to make aurelia driver for', context)
+  
   const driverCreator: DriverFunction = function aureliaDriver(props$) {
     props$.subscribe((propData) => {
       Object.keys(propData).forEach(propName => {
         const newValue = propData[propName]
-        const previousValue = context.aureliaViewValues.get(propName)
-        
-        if (previousValue !== newValue) {
-          console.log('previous value different, setting', propName, previousValue, newValue)
-          // TODO: instead of always setting the binding value, 
-          // we should intelligently compare to see if it's an array or map or set
-          // and mutate accordingly to make use of Aurelia's diffing algos
-          invokeAureliaBindingSetter(context, propName, newValue)
-        } 
-        // else {
-        //   console.log('previous value equal, not setting', propName, previousValue, newValue)
-        // }
+        invokeAureliaBindingSetter(context, propName, newValue)
       })
     })
-    // query props$ 
-    // Use props$ as instructions to fill binding properties
-    // ...
+    
     const AureliaSource = {
-      select: function select(selector) {
+      select: function select(selector: string) {
         const observable = getAureliaObservableForBinding(context, selector)
-        return observable && observable._aureliaType === 'property' ? observable : null
+        if (!observable || observable._aureliaType != 'property')
+          throw new Error(`Cannot select an unexistent binding ${selector}`)
+        return observable
       },
-      actions: function actions(selector) {
+      actions: function actions(selector: string) {
         const observable = getAureliaObservableForBinding(context, selector)
-        return observable && observable._aureliaType === 'event' ? observable : null
+        if (!observable || observable._aureliaType != 'event')
+          throw new Error(`Cannot select an unexistent binding ${selector}`)
+        return observable
       },
     }
     return AureliaSource
   }
+  
   driverCreator.streamAdapter = rxjsAdapter
   
   // aurelia specific
   if (!context.propertyViewSetters)
-    context.propertyViewSetters = new Map<string, (value)=>void>();
+    context.propertyViewSetters = new Map<string, (value)=>void>()
+
   if (!context.aureliaFromViewObservables)
-    context.aureliaFromViewObservables = new Map<string, Observable<any>>();
+    context.aureliaFromViewObservables = new Map<string, Observable<any>>()
+
   if (!context.aureliaToViewObservables)
-    context.aureliaToViewObservables = new Map<string, Observable<any>>();
+    context.aureliaToViewObservables = new Map<string, Observable<any>>()
+
   if (!context.aureliaViewValues)
-    context.aureliaViewValues = new Map<string, string>();
+    context.aureliaViewValues = new Map<string, string>()
   
   if (!context.cycleStarted || !context.cycleStartedResolve)
-    context.cycleStarted = new Promise<void>((resolve) => context.cycleStartedResolve = resolve);
+    context.cycleStarted = new Promise<void>((resolve) => context.cycleStartedResolve = resolve)
   
   return driverCreator
 }
@@ -119,25 +113,26 @@ export class InterceptBindingBehavior {
     const expression = binding.sourceExpression.expression
     let firstExpression = expression.expression || expression
     
-    const maxNesting = 10
+    let maxNesting = 10
     while (!firstExpression.name && maxNesting--) {
       firstExpression = firstExpression.left
     }
     const name = firstExpression.name
     
-    console.log('Creating binding via interception', name)
+    logger.debug(`Creating Cycle binding for '${name}' via interception`)
     
     // TODO: don't create toView when 'callSource' type
     
     const toViewObservers = new Set<Observer<string>>()
     
     const toViewObservable:Observable<any> = Observable.create(function (observer: Observer<any>) {
-      console.log('Creating toView binding observable for:', name)
+      // logger.debug('Creating toView binding observable for:', name)
+      
       // Yield a single value and complete
       toViewObservers.add(observer)
       // Any cleanup logic might go here
       return function () {
-        console.log('disposed of toView observable for', name)
+        // logger.debug('disposed of toView observable for', name)
         toViewObservers.delete(observer)        
       }
     })
@@ -155,9 +150,9 @@ export class InterceptBindingBehavior {
       const updateBindingValueInView = binding[method].bind(binding);
       
       toViewSubscription = toViewObservable.subscribe(value => {
-        // console.log('updating toView', name, value)
+        // logger.debug('updating toView', name, value)
         updateBindingValueInView(value)
-      }, error => console.error('Error in a toViewObservable', name))
+      }, error => logger.error(`Error in a toViewObservable binding for ${name}`))
       
       const toViewObserversNextAll = (value) => {
         toViewObservers.forEach(observer => observer.next(value))
@@ -171,7 +166,7 @@ export class InterceptBindingBehavior {
         context.cycleStarted.then(() => {
           // TODO: should we seed an initial value if it is undefined?
           if (value !== undefined) {
-            console.log('an initial value was seeded to the observable', name, value)
+            logger.debug(`an initial value was seeded to the observable: ${name} = '${value}'`)
             toViewObserversNextAll(value)
           }
         })
@@ -187,12 +182,12 @@ export class InterceptBindingBehavior {
       let fromViewObservers = new Set<Observer<string|{event; arguments}>>()
       
       const fromViewObservable:Observable<any> = Observable.create(function (observer: Observer<any>) {
-        console.log('Creating fromView binding observable for:', name)
+        // logger.debug('Creating fromView binding observable for:', name)
         // Yield a single value and complete
         fromViewObservers.add(observer)
         // Any cleanup logic might go here
         return function () {
-          console.log('disposed of fromView observable for', name)
+          // logger.debug('disposed of fromView observable for', name)
           fromViewObservers.delete(observer)
         }
       })
@@ -210,7 +205,7 @@ export class InterceptBindingBehavior {
         // we seed the value as user input to the observable 
         
         binding[method] = (value) => {
-          // console.log('you changed the value of', name, value)
+          // logger.debug('you changed the value of', name, value)
           fromViewObservers.forEach(observer => observer.next(value))
         }
         
@@ -230,7 +225,7 @@ export class InterceptBindingBehavior {
           for (let arg of args) {
             evaluatedArgs.push(arg.evaluate(binding.source, binding.lookupFunctions, true))
           }
-          // console.log('you invoked a method', name, event, evaluatedArgs)
+          // logger.debug('you invoked a method', name, event, evaluatedArgs)
           fromViewObservers.forEach(observer => observer.next({ event, arguments: evaluatedArgs }))          
         }
         
@@ -242,12 +237,12 @@ export class InterceptBindingBehavior {
       binding.allChangesObservable = 
         allChanges.subscribe(
           (value) => {
-            // console.log('a value was set', name, value)
+            // logger.debug('a value was set', name, value)
             context.aureliaViewValues.set(name, value)
           }, 
-          (error) => console.error(error.message), 
+          (error) => logger.error(error.message), 
           () => {
-            console.log('completed allChangesObservable', name)
+            logger.debug(`completed allChangesObservable for ${name}`)
             binding.allChangesObservable = undefined
           }
         )
@@ -275,4 +270,17 @@ export class InterceptBindingBehavior {
       binding.fromViewObservable = undefined
     }
   }
+}
+
+
+/**
+* Decorator: Specifies the dependencies that should be injected by the DI Container into the decoratored class/function.
+*/
+export function cycle(potentialTarget?: any): any {
+  let deco = function(target) {
+    console.log('cycle decorator', target)
+    // target.inject = metadata.getOwn(metadata.paramTypes, target) || _emptyParameters;
+  }
+
+  return potentialTarget ? deco(potentialTarget) : deco;
 }
