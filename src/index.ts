@@ -168,17 +168,19 @@ export function makeAureliaDriver(context: any) {
 const interceptMethods = ['updateTarget', 'updateSource', 'callSource']
 
 export class CycleBindingBehavior {
-  bind(binding, scope) { // , param, param...
+  bind(binding, scope, name) { // , param, param...
     const context = scope.overrideContext.bindingContext // == Welcome
     
     const expression = binding.sourceExpression.expression
     let firstExpression = expression.expression || expression
     
-    let maxNesting = 10
-    while (!firstExpression.name && maxNesting--) {
-      firstExpression = firstExpression.left
+    if (!name) {
+      let maxNesting = 10
+      while (!firstExpression.name && maxNesting--) {
+        firstExpression = firstExpression.left
+      }
+      name = firstExpression.name
     }
-    const name = firstExpression.name
     
     logger.debug(`Creating Cycle binding for '${name}' via interception`)
     
@@ -226,10 +228,10 @@ export class CycleBindingBehavior {
       binding[method] = (value) => {
         context.cycleStarted.then(() => {
           // TODO: should we seed an initial value if it is undefined?
-          if (value !== undefined) {
+          // if (value !== undefined) {
             logger.debug(`an initial value was seeded to the observable: ${name} = '${value}'`)
             toViewObserversNextAll(value)
-          }
+          // }
         })
         // toViewObservers.forEach(observer => observer.next(value))
       }
