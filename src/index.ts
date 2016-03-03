@@ -70,7 +70,8 @@ export type FromViewObservable = FromViewActionObservable | FromViewValueObserva
 export type FromViewObservableMap = Map<string, FromViewObservable>;
 export type ViewObservableMap = Map<string, ViewObservable>;
 export type ViewValues = Map<string, string | number>;
-export type Action = { event: Event, arguments: Array<any> };
+export type AnyEvent = Event | FocusEvent | GamepadEvent | HashChangeEvent | KeyboardEvent | MessageEvent | MouseEvent | MouseWheelEvent | MSGestureEvent | MSManipulationEvent | MSMediaKeyMessageEvent | MSMediaKeyNeededEvent | MSSiteModeEvent | MutationEvent | NavigationCompletedEvent | NavigationEvent | NavigationEventWithReferrer | OfflineAudioCompletionEvent | PageTransitionEvent | PermissionRequestedEvent | PointerEvent | PopStateEvent | ProgressEvent | ScriptNotifyEvent | StorageEvent | SVGZoomEvent | TextEvent | TouchEvent | TrackEvent | TransitionEvent | UIEvent | UnviewableContentIdentifiedEvent | WebGLContextEvent | WheelEvent;
+export type Action = { event: AnyEvent, arguments: Array<any> };
 export type ViewSource = { values: (bindingName: string) => FromViewValueObservable, actions: (bindingName: string) => FromViewActionObservable };
 
 function invokeAureliaBindingSetter(context: any, name: string, value: string) {
