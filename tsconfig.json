@@ -3,7 +3,7 @@
   "compilerOptions": {
     "rootDir": "src/",
     "sourceMap": true,
-    "target": "es6",
+    "target": "es5",
     "module": "amd",
     "declaration": true,
     "noImplicitAny": false,

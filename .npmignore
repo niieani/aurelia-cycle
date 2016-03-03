@@ -7,3 +7,9 @@ example
 styles
 test
 typings
+aurelia.protractor.js
+index.html
+dist/example
+tsconfig.*json
+tsd.json
+tslint.json

@@ -1,15 +1,13 @@
 import {View} from 'aurelia-templating';
-// import {Controller, HtmlBehaviorResource, BehaviorInstruction, View} from 'aurelia-templating';
-// import {Observable, Observer, Subscription} from '../jspm_packages/npm/rxjs@5.0.0-beta.2/Rx'
-// import Cycle from '../jspm_packages/npm/@cycle/core@7.0.0-rc1/lib/index'
-// import rxjsAdapter from '../jspm_packages/npm/@cycle/rxjs-adapter@1.0.0/lib/index'
-// import { DriverFunction } from '../jspm_packages/npm/@cycle/base@1.2.2/lib/index'
 import {Observable, Observer, Subscription} from 'rxjs/Rx'
 import Cycle from '@cycle/core/lib/index'
 import rxjsAdapter from '@cycle/rxjs-adapter/lib/index'
 import { DriverFunction } from '@cycle/base'
 
 import * as TheLogManager from 'aurelia-logging'
+
+// export { default as Cycle } from '@cycle/core/lib/index'
+// export { Subject, Scheduler, Observable, Observer, Operator, Subscriber, Subscription, Symbol, AsyncSubject, ReplaySubject, BehaviorSubject, ConnectableObservable, Notification, EmptyError, ArgumentOutOfRangeError, ObjectUnsubscribedError, UnsubscriptionError } from 'rxjs/Rx'
 
 const logger = TheLogManager.getLogger('aurelia-cycle')
 
@@ -20,7 +18,7 @@ export function configure(frameworkConfig) {
   const originalBind:(scope)=>void = View.prototype.bind
   
   View.prototype.bind = function bind(context: any, overrideContext?: Object, _systemUpdate?: boolean): void {
-    originalBind.apply(this, arguments)
+    let sources
     
     if (context && typeof context.cycle == 'function') {
       function getDefaultSources() {
@@ -28,7 +26,7 @@ export function configure(frameworkConfig) {
       }
       
       // console.log('sources', context, context.cycleDrivers, scope)
-      let sources = context.cycleDrivers
+      sources = context.cycleDrivers
       // logger.debug('starting post-binding for cycle hook', sources, typeof sources, context.constructor.name + 'View', context.constructor.name + 'View' in sources)
       
       if (sources && typeof sources == 'object') {
@@ -39,6 +37,11 @@ export function configure(frameworkConfig) {
         // logger.debug('using default sources', sources)
         sources = getDefaultSources()
       }
+    }
+    
+    originalBind.apply(this, arguments)
+    
+    if (sources) {
       // const sources = context.cycleDrivers || { [context.constructor.name + 'View']: makeAureliaDriver(context) }
       
       Cycle.run(context.cycle.bind(context), sources)
@@ -342,4 +345,3 @@ export function cycle(potentialTarget?: any): any {
 
   return potentialTarget ? deco(potentialTarget) : deco;
 }
-
