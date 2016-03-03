@@ -4,7 +4,7 @@ An Aurelia plugin that allows you to manage Aurelia's View-Bindings functionally
 
 ## Why?
 
-Cycle.js' architecture is arguably better (and definitely more flexible) than the traditional MV*, or even the more recent Flux or Redux programming patterns.
+Cycle.js' architecture is arguably better (and definitely more flexible) than the traditional MVC, or even the more recent Flux or Redux programming patterns.
 It's functional style can be a little overwhelming at first, but thanks to sites like http://rxmarbles.com its concepts are much easier to grasp.  
 
 If you're new to Observables or Cycle.js, I'd recommend watching the fantastic talk by Cycle.js' creator, [André Staltz](https://twitter.com/andrestaltz):
