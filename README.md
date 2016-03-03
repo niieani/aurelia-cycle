@@ -4,15 +4,22 @@ An Aurelia plugin that allows you to manage Aurelia's View-Bindings functionally
 
 ## Why?
 
-If you're new to Observables or Cycle.js, I recommend watching the fantastic talk by Cycle.js' creator, [André Staltz](https://twitter.com/andrestaltz):
+Cycle.js' architecture is arguably better (and definitely more flexible) than the traditional MV*, or even the more recent Flux or Redux programming patterns.
+It's functional style can be a little overwhelming at first, but thanks to sites like http://rxmarbles.com its concepts are much easier to grasp.  
 
-* [What if the user was a function?](https://www.youtube.com/watch?v=1zj7M1LnJV4) - Presentation at JSConf BP2015 by [Andre Staltz](https://twitter.com/andrestaltz)
+If you're new to Observables or Cycle.js, I'd recommend watching the fantastic talk by Cycle.js' creator, [André Staltz](https://twitter.com/andrestaltz):
 
-## Why not simply use Cycle.js?
+* [What if the user was a function?](https://www.youtube.com/watch?v=1zj7M1LnJV4) - Presentation at JSConf BP2015
 
-Cycle.js is more of an architecture style, a paradigm, a design concept, than a full-blown web-framework like Aurelia, Angular or even React. It's a way of dealing with data coming in and out in a cycle, and it needs to drive a set of drivers to be useful.
+## Why not simply use Cycle.js and forget about Aurelia?
 
-This is one such driver that enables it to drive Aurelia's View-Bindings. Cycle.js has it's own effort to drive the DOM with the use of its [DOM Driver](https://github.com/cyclejs/dom), however it is still in an earlier development phase than Aurelia and many issues have yet to be worked out. Aurelia on the other hand is already awesome at driving the DOM, so why not have the best of both worlds?
+Cycle.js is more of an architecture style, a paradigm, a design concept, than a full-blown web-framework like Aurelia, Angular2 or even React. It's a way of dealing with data coming in and out, in a cycle, and it needs to drive a set of drivers to be useful.
+
+This is one such driver that enables it to drive Aurelia's View-Bindings. Cycle.js has it's own effort to drive the DOM with the use of its [DOM Driver](https://github.com/cyclejs/dom), however it is still in an earlier development phase than Aurelia and many issues have yet to be worked out. Aurelia on the other hand is already awesome at driving the DOM, so my thinking was - why not have the best of both worlds?
+
+This way, Aurelia acts as an abstraction layer for the DOM, and all you need to worry about is the pure data that goes in and out.
+
+The added benefit of Aurelia's binding system is that you don't have to go all-pure-and-functional at once - you can mix-and-match, driving only some components using `aurelia-cycle`, while leaving others to be dealt with by Aurelia.
 
 ## Caveats
 
