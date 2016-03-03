@@ -227,11 +227,11 @@ export class CycleBindingBehavior {
       // binding[method] = toViewObserversNextAll
       binding[method] = (value) => {
         context.cycleStarted.then(() => {
-          // TODO: should we seed an initial value if it is undefined?
-          // if (value !== undefined) {
+          // don't seed an initial value if it is undefined
+          if (value !== undefined) {
             logger.debug(`an initial value was seeded to the observable: ${name} = '${value}'`)
             toViewObserversNextAll(value)
-          // }
+          }
         })
         // toViewObservers.forEach(observer => observer.next(value))
       }
