@@ -1,6 +1,6 @@
 {
   "name": "aurelia-cycle",
-  "version": "0.0.4",
+  "version": "0.0.5",
   "description": "An Aurelia plugin that enables the use of Cycle.js inside of Aurelia.",
   "keywords": [
     "aurelia",
