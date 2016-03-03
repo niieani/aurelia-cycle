@@ -9,7 +9,7 @@ test
 typings
 aurelia.protractor.js
 index.html
-dist/example
+dist/example-old
 tsconfig.*json
 tsd.json
 tslint.json
