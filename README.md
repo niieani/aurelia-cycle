@@ -21,29 +21,6 @@ This way, Aurelia acts as an abstraction layer for the DOM, and all you need to 
 
 The added benefit of Aurelia's binding system is that you don't have to go all-pure-and-functional at once - you can mix-and-match, driving only some components using `aurelia-cycle`, while leaving others to be dealt with by Aurelia.
 
-## Caveats
-
-Since this is still an early alpha, there are two things that need to be dealt with before this should be used in production:
-
-* Performance: There is no diffing algorithm for complex objects or arrays returned into the sinks, which feed the view engine. This means that if you use a `repeat` strategy for displaying your data, their Views might get recreated every time new data is fed into the sink.
-* Size: This driver uses Observables from RxJS 5, however the Cycle.js is still being rewritten into RxJS 5, and requires Rx 4 as well. Since both libraries have to be loaded, both the size and the initial loading time goes up by quite a bit. 
-
-## Dependencies
-
-* [aurelia-templating](https://github.com/aurelia/templating)
-* [aurelia-logging](https://github.com/aurelia/logging)
-* [@cycle/core](https://github.com/cyclejs/core)
-* [@cycle/rxjs-adapter](https://github.com/cyclejs/rxjs-adapter)
-* [rxjs](https://github.com/Reactive-Extensions/RxJS)
-
-## Used By
-
-This library isn't used by Aurelia. It is an optional plugin.
-
-## Platform Support
-
-This library can be used in the **browser** as well as on the **server**.
-
 ## How to install this plugin?
 
 1. In your project install the plugin and `rxjs` via `jspm` with following command
@@ -138,6 +115,29 @@ The ViewSink (in the return value of `cycle()`) should be an Observable of an ob
 The `cycle(sources)` method is run immediately after `bind()`.
 
 For more examples, see the [example repository](https://github.com/niieani/aurelia-cycle-example).
+
+## Caveats
+
+Since this is still an early alpha, there are two things that need to be dealt with before this should be used in production:
+
+* Performance: There is no diffing algorithm for complex objects or arrays returned into the sinks, which feed the view engine. This means that if you use a `repeat` strategy for displaying your data, their Views might get recreated every time new data is fed into the sink.
+* Size: This driver uses Observables from RxJS 5, however the Cycle.js is still being rewritten into RxJS 5, and requires Rx 4 as well. Since both libraries have to be loaded, both the size and the initial loading time goes up by quite a bit. 
+
+## Dependencies
+
+* [aurelia-templating](https://github.com/aurelia/templating)
+* [aurelia-logging](https://github.com/aurelia/logging)
+* [@cycle/core](https://github.com/cyclejs/core)
+* [@cycle/rxjs-adapter](https://github.com/cyclejs/rxjs-adapter)
+* [rxjs](https://github.com/Reactive-Extensions/RxJS)
+
+## Used By
+
+This library isn't used by Aurelia. It is an optional plugin.
+
+## Platform Support
+
+This library can be used in the **browser** as well as on the **server**.
 
 ## Building The Code
 
