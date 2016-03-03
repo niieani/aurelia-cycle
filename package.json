@@ -1,7 +1,7 @@
 {
   "name": "aurelia-cycle",
   "version": "0.0.3",
-  "description": "An Aurelia plugin that enables the use of CycleJS inside of Aurelia.",
+  "description": "An Aurelia plugin that enables the use of Cycle.js inside of Aurelia.",
   "keywords": [
     "aurelia",
     "rxjs",
