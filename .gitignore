@@ -7,4 +7,7 @@ bower_components
 build/reports
 coverage
 test/e2e/dist
+
+# temporary
 src/example-old
+test-off
