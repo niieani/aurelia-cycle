@@ -10,15 +10,16 @@ If you're new to Observables or Cycle.js, I recommend watching the fantastic tal
 
 ## Why not simply use Cycle.js?
 
-Cycle.js is more of an architecture style, a paradigm, a design concept, than a full-blown web-framework like Aurelia, Angular or even React. It's a way of dealing with data coming in and out - in a cycle, and it needs to drive a set of drivers to be useful.
+Cycle.js is more of an architecture style, a paradigm, a design concept, than a full-blown web-framework like Aurelia, Angular or even React. It's a way of dealing with data coming in and out in a cycle, and it needs to drive a set of drivers to be useful.
 
-This is one such driver that enables it to drive Aurelia's View-Bindings. Cycle.js has it's own effort to drive the DOM with the use of its [DOM Driver](https://github.com/cyclejs/dom), however it is still in an earlier phase than Aurelia and many problems need to be worked out. Aurelia on the other hand is already awesome at driving the DOM, so why not have the best of both worlds?
+This is one such driver that enables it to drive Aurelia's View-Bindings. Cycle.js has it's own effort to drive the DOM with the use of its [DOM Driver](https://github.com/cyclejs/dom), however it is still in an earlier development phase than Aurelia and many issues have yet to be worked out. Aurelia on the other hand is already awesome at driving the DOM, so why not have the best of both worlds?
 
 ## Caveats
 
-(alpha) Performance: Since this is still an early alpha, there is no diffing algorithm for complex objects or arrays returned into the sinks, which feed the view engine. This means that if you use a `repeat` strategy for displaying your data, their Views might get recreated every time new data is fed into the sink.
+Since this is still an early alpha, there are two things that need to be dealt with before this should be used in production:
 
-(alpha) Size: This driver uses Observables from RxJS 5, however the Cycle.js is still being rewritten into RxJS 5, and requires Rx 4 as well. Since both libraries have to be loaded, the size goes up by quite a bit. 
+* Performance: There is no diffing algorithm for complex objects or arrays returned into the sinks, which feed the view engine. This means that if you use a `repeat` strategy for displaying your data, their Views might get recreated every time new data is fed into the sink.
+* Size: This driver uses Observables from RxJS 5, however the Cycle.js is still being rewritten into RxJS 5, and requires Rx 4 as well. Since both libraries have to be loaded, both the size and the initial loading time goes up by quite a bit. 
 
 ## Dependencies
 
@@ -40,22 +41,27 @@ This library can be used in the **browser** as well as on the **server**.
 
 1. In your project install the plugin and `rxjs` via `jspm` with following command
 
-```shell
-jspm install aurelia-cycle rxjs
-```
+  ```shell
+  jspm install aurelia-cycle rxjs
+  ```
 2. Make Aurelia load the plugin by adding the following line to the `configure` function in the `main.js` file of your `src` folder
 
-```diff
-  export function configure(aurelia) {
-    aurelia.use
-      .standardConfiguration()
-      .developmentLogging();
+  ```diff
+    export function configure(aurelia) {
+      aurelia.use
+        .standardConfiguration()
+        .developmentLogging();
 
-+   aurelia.use.plugin('aurelia-cycle');
+  +   aurelia.use.plugin('aurelia-cycle');
 
-    aurelia.start().then(a => a.setRoot());
-  }
-```
+      aurelia.start().then(a => a.setRoot());
+    }
+  ```
+3. If you use TypeScript or use Visual Studio Code the type declarations for `aurelia-cycle` should be visible automatically. However you will need to install `rxjs` to npm to get intellisense for Rx and Observables:
+
+  ```shell
+  npm install rxjs --save-dev
+  ``` 
 
 ## Using the plugin
 
@@ -71,9 +77,11 @@ To make bindings visible to the driver you need to apply the `cycle` Binding Beh
 </template>
 ```
 
+This will make Aurelia bypass the default View <-> ViewModel binding and feed the data in and out of the Rx Observables available as sources in the `cycle(sources)` method.
+
 By defining the `cycle(sources)` method on a given ViewModel, the plugin will use it to run Cycle.js on it.
 
-By default, one driver is created for you with the name *ClassName*View, but you may manually define the drivers by adding a `cycleDrivers` property to your ViewModel.
+By default, one driver is created for you with the name *YourClassName*View, but you may manually define the drivers by adding a `cycleDrivers` property to your ViewModel.
 
 ```javascript
 import {Observable} from 'rxjs/Rx'
@@ -104,7 +112,7 @@ export class Counter {
 }
 ```
 
-A ViewSource (`CounterView` in the above example) exposes two methods (mimicking the Cycle.js DOM driver's 'select' and 'events'):
+A ViewSource (`CounterView` in the above example) exposes two methods (similarly to Cycle.js DOM driver's `select(...)` and `events(...)`):
 
 `values(bindingName)`: returns an Observable with all the changes made to the value of the selected two-way binding
 `actions(functionName)`: returns an Observable of all the calls made to the function of the selected name
