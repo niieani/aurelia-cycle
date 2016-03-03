@@ -38,10 +38,10 @@ This library can be used in the **browser** as well as on the **server**.
 
 ## How to install this plugin?
 
-1. In your project install the plugin via `jspm` with following command
+1. In your project install the plugin and `rxjs` via `jspm` with following command
 
 ```shell
-jspm install aurelia-cycle
+jspm install aurelia-cycle rxjs
 ```
 2. Make Aurelia load the plugin by adding the following line to the `configure` function in the `main.js` file of your `src` folder
 
@@ -121,6 +121,8 @@ The values of the Observable returned by `actions(functionName)` is an object th
 The ViewSink (in the return value of `cycle()`) should be an Observable of an object, which properties match the bindings names of the View.
 
 The `cycle(sources)` method is run immediately after `bind()`.
+
+For more examples, see the [example repository](https://github.com/niieani/aurelia-cycle-example).
 
 ## Building The Code
 

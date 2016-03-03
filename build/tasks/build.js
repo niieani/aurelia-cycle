@@ -16,7 +16,9 @@ var sass = require('gulp-sass');
 var typescriptCompiler = typescriptCompiler || null;
 gulp.task('build-system', function() {
   if (!typescriptCompiler) {
-    typescriptCompiler = typescript.create(require('../../tsconfig.no-node.json').compilerOptions);
+    const compilerOptions = require('../../tsconfig.json').compilerOptions;
+    delete compilerOptions.moduleResolution;
+    typescriptCompiler = typescript.create(compilerOptions);
   }
   return gulp.src(paths.dtsSrc.concat(paths.source).concat(paths.sourceJs))
     .pipe(plumber())

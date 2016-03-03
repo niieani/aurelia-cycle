@@ -12,7 +12,7 @@
   "bugs": {
     "url": "https://github.com/niieani/aurelia-cycle/issues"
   },
-  "license": "CC0-1.0",
+  "license": "MIT",
   "author": "Bazyli Brzóska <bazyli.brzoska@gmail.com> (https://invent.life/)",
   "main": "dist/index.js",
   "repository": {
