@@ -13,3 +13,4 @@ dist/example-old
 tsconfig.*json
 tsd.json
 tslint.json
+backup

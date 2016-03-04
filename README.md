@@ -51,13 +51,13 @@ The added benefit of Aurelia's binding system is that you don't have to go all-p
 
 The plugin enables you to use Aurelia's View-Bindings as Cycle.js drivers.
 
-To make bindings visible to the driver you need to apply the `cycle` Binding Behavior to them as shown below:
+To make bindings visible to the driver you need to refer to them as if they're either `cycleValue('yourName')` or `cycleAction('yourName')` as shown below:
 
 ```html
 <template>
-  <h2>${count & cycle}</h2>
-  <button click.delegate="increment() & cycle">+</button>
-  <button click.delegate="decrement() & cycle">-</button>
+  <h2>${cycleValue('count')}</h2>
+  <button click.delegate="cycleAction('increment')">+</button>
+  <button click.delegate="cycleAction('decrement')">-</button>
 </template>
 ```
 
