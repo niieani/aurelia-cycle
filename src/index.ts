@@ -45,31 +45,59 @@ function triggerObservers(name:string, value: ViewValue, context) {
 //   }
 // }
 
+type ValueAndBinding<T> = { value: T, binding: Binding }
+
 export class CycleShared<T> {
-  constructor(public observers: Set<Observer<T>>, public last: string) {}
+  public observers: Set<Observer<ValueAndBinding<T>>>;
+  
+  next(value: ValueAndBinding<T>) {
+    this.observers.forEach(observer => observer.next(value))
+  }
+}
+export class CycleSharedValue<T> extends CycleShared<T> {
+  constructor(public observers: Set<Observer<ValueAndBinding<T>>>, public last: T) {
+    super()
+  }
   
   next(value) {
-    this.observers.forEach(observer => observer.next(value))
-    this.last = value
+    this.last = value.value
+    super.next(value)
+  }
+}
+export class CycleSharedAction<T> extends CycleShared<T> {
+  constructor(public observers: Set<Observer<ValueAndBinding<T>>>) {
+    super()    
+  }
+  
+  onTriggerReturn: any;
+  private _args: Array<any>;
+  
+  getArgs(mergeWithEvaluated) {
+    if (!this._args) return mergeWithEvaluated;
+    
   }
 }
 
 export interface CycleSharedObservable<T> extends Observable<T> {
-  _cycleShared: CycleShared<T>;
+  _cycleShared: CycleSharedValue<T>;
+}
+export interface CycleSharedActionObservable<T> extends Observable<T> {
+  _cycleShared: CycleSharedAction<T>;
 }
 
-export function changable(initialValue: any) {
-  let observers = new Set<Observer<any>>()
-  const observable = (Observable.create(function (observer: Observer<any>) {
+export function changable<T>(initialValue?: T) {
+  let observers = new Set<Observer<ValueAndBinding<T>>>()
+  const observable = (Observable.create(function (observer: Observer<ValueAndBinding<T>>) {
     observers.add(observer)
     // Any cleanup logic might go here
     return function () {
       observers.delete(observer)
     }
-  }) as Observable<any>)
+  }) as Observable<T>)
   
-  const sharedObservable = observable.publish().refCount() as CycleSharedObservable<any>
-  sharedObservable._cycleShared = new CycleShared(observers, initialValue)
+  const sharedObservable = observable.publish().refCount() as CycleSharedObservable<T> //TODO: 
+  
+  sharedObservable._cycleShared = new CycleSharedValue(observers, initialValue)
   
   return sharedObservable
   
@@ -139,28 +167,41 @@ function removeObservableIfNoObservers(name, context) {
   // TODO: cleanup
 }
 
-function invokeAureliaBindingSetter(context: any, name: string, value: string) {
+function isCycleShareObservable(value: CycleSharedObservable<any>): boolean {
+  return typeof value == 'object' && value._cycleShared instanceof CycleShared
+}
+
+function invokeAureliaBindingSetter(context: any, name: string, value: any) {
   // const previousValue = context.aureliaViewValues.get(name)
   const previousValue = context[name]
   
-  if (previousValue !== value) {
-    // previous value different 
-    // logger.debug(`setting ${name}: from '${previousValue}' to '${value}'`)
-    
-    // TODO: instead of always setting the binding value, 
-    // we should intelligently compare to see if it's an array or map or set
-    // and mutate accordingly to make use of Aurelia's diffing algos
-    
-    const observers = context.observers as Map<string, Observer<string>>
-    const observer = observers.get(name)
-    if (!observer) {
-      throw new Error(`Cannot set '${name}' binding value, because it is never used`)
+  if (previousValue === value) return
+  
+  if (isCycleShareObservable(previousValue)) {
+    const cycleShared = (previousValue as CycleSharedObservable<any>)._cycleShared
+    if (cycleShared.last === value) return
+    if (isCycleShareObservable(value)) {
+      logger.debug('new logic: note, replacing the stub observable with this one')
+      context[name] = value
+      return
     }
-    observer.forEach(observer => observer.next(value))
+    cycleShared.next({ value, binding: undefined })
+    return
   }
-  // else {
-  //   logger.debug('previous value equal, not setting', propName, previousValue, newValue)
-  // }
+  
+  // previous value different 
+  // logger.debug(`setting ${name}: from '${previousValue}' to '${value}'`)
+  
+  // TODO: instead of always setting the binding value, 
+  // we should intelligently compare to see if it's an array or map or set
+  // and mutate accordingly to make use of Aurelia's diffing algos
+  
+  const observers = context.observers as Map<string, Observer<string>>
+  const observer = observers.get(name)
+  if (!observer) {
+    throw new Error(`Cannot set '${name}' binding value, because it is never used`)
+  }
+  observer.forEach(observer => observer.next(value))
 }
 
 /*
@@ -297,8 +338,29 @@ export function configure(frameworkConfig: FrameworkConfiguration) {
   const callScopeConnect: Function = CallScope.prototype.connect
   CallScope.prototype.connect = function connect(binding: Binding & any, scope: Scope) {
     callScopeConnect.apply(this, arguments)
-    // console.log('connected', binding, scope, this)
-    // const context = scope.bindingContext
+    
+    // NEW LOGIC:
+    if (this.name == 'cycle') {
+      const observable = this.args[0].evaluate(scope, binding.lookupFunctions, true) as CycleSharedObservable<ValueAndBinding<any>>
+      if (isCycleShareObservable(observable)) {
+        logger.debug('new logic: subscribe')
+                
+        observable.filter(value => value.binding !== this).subscribe(
+          (value) => {
+            logger.debug('new logic: updating binding for', this.args[0].name, 'prev value', observable._cycleShared.last, 'new value', value)
+            let bindingValue = binding.sourceExpression.evaluate(binding.source, binding.lookupFunctions)
+            binding.updateTarget(bindingValue) // update the whole binding
+          }, 
+          (error) => logger.error(`binding error for ${name}`, error), 
+          () => logger.debug(`observable for ${name} complete`)
+        )
+        // TODO: cleanup after unbound?
+      } else {
+        // TODO: if observable is null - create a new one, like for CycleAction!
+        logger.error('the argument passed in to the binding is not a CycleObservable', observable)
+      }
+      return
+    }
     
     // find closest cycle context
     const context = getContextFor('observables', scope, this.ancestor)
@@ -328,11 +390,6 @@ export function configure(frameworkConfig: FrameworkConfiguration) {
         console.log('setting mamma mia')
         // this is used to set the value of the binding to an anonymous method that executes it
         binding.updateTarget(new CycleBindingAction(name, context, Array.from(this.args), scope, binding.lookupFunctions))
-        
-        // binding.updateTarget(function() {
-        //   console.log('mamma mia!', this)
-        //   // binding.sourceExpression.evaluate(binding.source, binding.lookupFunctions)
-        // })
       }
     }
   }
@@ -349,11 +406,21 @@ export function configure(frameworkConfig: FrameworkConfiguration) {
   }
   
   CallScope.prototype.assign = function assign(scope: Scope, value: any, lookupFunctions: any): any {
-    // if (!context.cycle) {
+    // NEW LOGIC:
+    if (this.name == 'cycle') {
+      const observable = this.args[0].evaluate(scope, lookupFunctions, true) as CycleSharedObservable<any>
+      if (isCycleShareObservable(observable)) {
+        logger.debug('new logic: assign', value)
+        observable._cycleShared.next({ binding: this, value })
+      }
+      return
+    }
+    
     let context = getContextFor(this.name, scope, this.ancestor)
     if (!context || typeof context.cycle != 'function' || this.name !== 'cycleValue' || this.args.length === 0) {
       throw new Error(`Binding expression "${this}" cannot be assigned to.`);
     }
+    
     // const context = scope.bindingContext
     const name = this.args[0].evaluate(scope, lookupFunctions, true)
     context = getContextFor(name, scope, this.ancestor)
@@ -374,6 +441,7 @@ export function configure(frameworkConfig: FrameworkConfiguration) {
   CallScope.prototype.evaluate = function evaluate(scope: Scope, lookupFunctions, mustEvaluate: boolean) {
     let context = getContextFor(this.name, scope, this.ancestor)
     
+    // e.g. doSomething() where doSomething is a @bindable doSomething from another context;
     if (context[this.name] instanceof CycleBindingAction) {
       const cycleBindingAction = (context[this.name] as CycleBindingAction)
       
@@ -388,6 +456,26 @@ export function configure(frameworkConfig: FrameworkConfiguration) {
       // logger.debug(context, 'event trigerred on external context', name, args, event, this)
       // triggerObservers(this.name, { event, arguments: args }, (context[name] as CycleBindingAction).context)
       return
+    }
+    
+    // NEW LOGIC:
+    if (this.name == 'cycle') {
+      const observable = this.args[0].evaluate(scope, lookupFunctions, true) as CycleSharedObservable<any>
+      if (isCycleShareObservable(observable)) {
+        logger.debug('new logic: retrieve last value')
+        return observable._cycleShared.last
+      }
+    }
+    if (this.name == 'cycleEvent') {
+      const observable = this.args[0].evaluate(scope, lookupFunctions, true) as CycleSharedActionObservable<any>
+      if (isCycleShareObservable(observable)) {
+        logger.debug('new logic: trigger an action')
+        const args = evalList(scope, this.args, lookupFunctions)
+        args.shift()
+        const event = scope.overrideContext.$event
+        observable._cycleShared.next({ value: { event, arguments: observable._cycleShared.getArgs(args) }, binding: this })
+        return observable._cycleShared.onTriggerReturn
+      }
     }
     
     if (context && typeof context.cycle == 'function') {
@@ -410,8 +498,7 @@ export function configure(frameworkConfig: FrameworkConfiguration) {
         }
         // logger.debug(context, 'getting value to set in the view', name, this)
         
-        // no it's own we shouldn't return anything;
-        // instead we will use propertyViewSetters directly to set the value of this binding
+        // returning current value:
         if (name in context)
           return context[name]
       }
@@ -427,18 +514,29 @@ export function configure(frameworkConfig: FrameworkConfiguration) {
   CallScope.prototype.bind = function bind(binding: Binding & any, scope: Scope, lookupFunctions) {
     const expression = binding.sourceExpression // as Expression & { name:string, ancestor:any, args:Array<Expression>, _unbind:()=>void }
 
+    // NEW LOGIC:
+    if (expression.name == 'cycle' || expression.name == 'cycleEvent') {
+      // TODO: delay this?
+      const observable = expression.args[0].evaluate(scope, lookupFunctions, true) as CycleSharedObservable<any>
+      if (!observable) {
+        const name = expression.args[0].name
+        const context = getContextFor(name, scope, expression.ancestor)
+        logger.debug('new logic: would create a changable observable for', expression.args[0], 'with args method like', () => evalList(scope, this.args, lookupFunctions), 'context', context)
+        // TODO: lazy creation on first use ? store only args for first use?
+        if (!context[name]) // TODO: if not undefined
+          context[name] = changable() // create empty changable
+      }
+      // getOrCreateObservableNEWLOGIC(name, context, expression.name == 'cycle')
+      return
+    }
+
     if (expression.name == 'cycleValue' || expression.name == 'cycleAction') {
       const name = expression.args[0].evaluate(scope, lookupFunctions, true)
       const context = getContextFor(name, scope, expression.ancestor)
       // const context = getContextFor(expression.name, scope, expression.ancestor)
       // store the update method:
       const observable = getOrCreateObservable(name, context, expression.name == 'cycleValue')
-      // observable.subscribe(
-      //   (value) => binding.updateTarget(value), 
-      //   (error) => logger.error(`binding error for ${name}`, error), 
-      //   () => logger.debug(`observable for ${name} complete`)
-      // )
-      
+
       expression._unbind = () => removeObservableIfNoObservers(name, context)
     }
   }
