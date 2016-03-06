@@ -1,6 +1,6 @@
 import {CallScope, Scope, getContextFor, Binding, Expression} from 'aurelia-binding'
 import {View} from 'aurelia-templating'
-import {Observable, Observer, Subscription} from 'rxjs/Rx'
+import {Observable, Observer, Subscription, ReplaySubject} from 'rxjs/Rx'
 import Cycle from '@cycle/core/lib/index'
 import rxjsAdapter from '@cycle/rxjs-adapter/lib/index'
 import { DriverFunction } from '@cycle/base'
@@ -51,11 +51,15 @@ export class CycleSharedAction<T> extends CycleShared<T> {
   
   onTriggerReturn: any = undefined;
   
-  getArgs(mergeWith = []) {
-    if (!this.argsMethod) return mergeWith;
-    const args = this.argsMethod()
-    args.shift()
-    return args.concat(mergeWith)
+  getArgs() {
+    if (!this.argsMethod) return [];
+    return this.argsMethod()
+  }
+  
+  next(event, args) {
+    const metadata = { event, arguments: args, originArguments: this.getArgs() }
+    logger.debug('triggered action with metadata', metadata)
+    super.next(metadata)
   }
 }
 
@@ -67,23 +71,6 @@ export interface CycleSharedActionObservable<T> extends Observable<T> {
 }
 
 export function changableAction<T>(argsMethod: ()=>Array<any>) {
-    let observers = new Set<Observer<ValueAndBinding<T>>>()
-    const observable = (Observable.create(function (observer: Observer<ValueAndBinding<T>>) {
-      observers.add(observer)
-      // Any cleanup logic might go here
-      return function () {
-        observers.delete(observer)
-      }
-    }) as Observable<T>)
-    
-    const sharedObservable = observable.publish().refCount() as CycleSharedActionObservable<T> //TODO: 
-    
-    sharedObservable._cycleShared = new CycleSharedAction(observers, argsMethod)
-    
-    return sharedObservable
-  }
-
-export function changable<T>(initialValue?: T) {
   let observers = new Set<Observer<ValueAndBinding<T>>>()
   const observable = (Observable.create(function (observer: Observer<ValueAndBinding<T>>) {
     observers.add(observer)
@@ -93,6 +80,26 @@ export function changable<T>(initialValue?: T) {
     }
   }) as Observable<T>)
   
+  const sharedObservable = observable as CycleSharedActionObservable<T> //.publish().refCount()
+  
+  sharedObservable._cycleShared = new CycleSharedAction(observers, argsMethod)
+  
+  return sharedObservable
+}
+
+export function changable<T>(initialValue?: T) {
+  let observers = new Set<Observer<ValueAndBinding<T>>>()
+  
+  const observable = (Observable.create(function (observer: Observer<ValueAndBinding<T>>) {
+  // const observable = (ReplaySubject.create(function (observer: Observer<ValueAndBinding<T>>) {
+    observers.add(observer)
+    // Any cleanup logic might go here
+    return function () {
+      observers.delete(observer)
+    }
+  }) as Observable<T>)
+  
+  // const sharedObservable = observable as CycleSharedObservable<T>
   const sharedObservable = observable.publish().refCount() as CycleSharedObservable<T> //TODO: 
   
   sharedObservable._cycleShared = new CycleSharedValue(observers, initialValue)
@@ -123,6 +130,15 @@ export function changable<T>(initialValue?: T) {
   
 }
 
+export function isolateProperties(object) {
+  const bindableObject = {}
+  Object.getOwnPropertyNames(object).forEach(
+    property => bindableObject[property] = changable(object[property])
+  )
+  console.log('bindable object', object, '=', bindableObject)
+  return bindableObject
+}
+
 function isCycleShareObservable(value: CycleSharedObservable<any> | CycleSharedActionObservable<any>): boolean {
   return typeof value == 'object' && value._cycleShared instanceof CycleShared
 }
@@ -137,12 +153,14 @@ function invokeAureliaBindingSetter(context: any, name: string, value: any) {
     const cycleShared = (previousValue as CycleSharedObservable<any>)._cycleShared
     if (cycleShared.last === value) return
     if (isCycleShareObservable(value)) {
-      logger.debug('new logic: note, replacing the stub observable with this one')
+      logger.debug('note, replacing the stub observable with this one')
       context[name] = value
       return
     }
     cycleShared.next({ value, binding: undefined })
     return
+  } else {
+    logger.error(`[AureliaBindingSetter] no observable ${name} exists at `, context, 'when trying to set', value)    
   }
 }
 
@@ -152,9 +170,9 @@ function invokeAureliaBindingSetter(context: any, name: string, value: any) {
  */
 export function makeAureliaDriver(context: any) {
   // logger.debug('requested to make aurelia driver for', context)
-  
+  let subscription 
   const driverCreator: DriverFunction = function aureliaDriver(props$) {
-    props$.subscribe((propData) => {
+    subscription = props$.subscribe((propData) => {
       context.cycleStarted.then(() => {
         Object.keys(propData).forEach(propName => {
           const newValue = propData[propName]
@@ -166,13 +184,22 @@ export function makeAureliaDriver(context: any) {
     const AureliaSource = {
       values: function values(bindingName: string) {
         const observable = context[bindingName] as CycleSharedActionObservable<ValueAndBinding<any>>
+        if (!observable) {
+          throw new Error(`No binding is set to observe '${bindingName}' in this context.'`)
+        }
         if (observable._cycleShared instanceof CycleSharedValue) {
           return observable.map(valueAndBinding => valueAndBinding.value)
         }
         return null
       },
       actions: function actions(bindingName: string) {
-        const observable = context[bindingName] as CycleSharedActionObservable<any>
+        let observable = context[bindingName] as CycleSharedActionObservable<any>
+        if (!observable) {
+          // when in a loop this won't be there!
+          // so let's set a stub instead and modify its ARGS method once it's bound
+          // throw new Error(`No binding is set to trigger '${bindingName}' in this context.'`)
+          context[bindingName] = observable = changableAction()
+        }
         if (observable._cycleShared instanceof CycleSharedAction) {
           return observable
         }
@@ -187,12 +214,14 @@ export function makeAureliaDriver(context: any) {
   if (!context.cycleStarted || !context.cycleStartedResolve)
     context.cycleStarted = new Promise<void>((resolve) => context.cycleStartedResolve = resolve)
   
+  // TODO: when UNBIND: subscription.unsubscribe()
+  
   return driverCreator
 }
 
 export function configure(frameworkConfig: FrameworkConfiguration) {
   // const bindingBehaviorInstance = frameworkConfig.container.get(CycleBindingBehavior)
-  // frameworkConfig.aurelia.resources.registerBindingBehavior('cycle', bindingBehaviorInstance) //new CycleBindingBehavior()
+  // frameworkConfig.aurelia.resources.registerBindingBehavior('cycleValue', bindingBehaviorInstance) //new CycleBindingBehavior()
   
   // TODO: investigate:
   // frameworkConfig.aurelia.resources.registerViewEngineHooks({ 
@@ -232,36 +261,70 @@ export function configure(frameworkConfig: FrameworkConfiguration) {
     }
   }
   
+  /**
+   * this happens when we want to subscribe the binding to outside changes
+   */
   const callScopeConnect: Function = CallScope.prototype.connect
   CallScope.prototype.connect = function connect(binding: Binding & any, scope: Scope) {
     callScopeConnect.apply(this, arguments)
     
+    if (this.name == 'cycleValueTest' || this.name == 'cycleActionTest') {
+      logger.debug(`[connect] [${this.name}]`, this.args[0].name, this, binding, scope, 'value of target', this.args[0].evaluate(scope, binding.lookupFunctions, true))      
+      return
+    }
+    
     // NEW LOGIC:
-    if (this.name == 'cycle') {
-      const observable = this.args[0].evaluate(scope, binding.lookupFunctions, true) as CycleSharedObservable<ValueAndBinding<any>>
+    if (this.name == 'cycleValue') {
+      logger.debug('[connect] start connect for VALUE:', this.args[0].name)      
+      let observable = this.args[0].evaluate(scope, binding.lookupFunctions, true) as CycleSharedObservable<ValueAndBinding<any>>
+
+      // if (!observable) {
+        // TODO: if observable is null - create a new one
+        // const name = this.args[0].name
+        // const context = getContextFor(name, scope, binding.sourceExpression.ancestor)
+      
+        // if (!context[name]) { // TODO: if not undefined
+        //   logger.debug('[connect] will create a changable VALUE observable for', name, 'context', context)
+        //   observable = context[name] = changable<ValueAndBinding<any>>() // create empty changable
+        // }
+      // }
+      
       if (isCycleShareObservable(observable)) {
-        logger.debug('new logic: subscribe')
+        logger.debug('[connect] will subscribe to', this.args[0].name)
                 
-        observable.filter(value => value.binding !== this).subscribe(
+        const subscription = observable.filter(value => value.binding !== this).subscribe(
           (value) => {
-            logger.debug('new logic: updating binding for', this.args[0].name, 'prev value', observable._cycleShared.last, 'new value', value)
-            let bindingValue = binding.sourceExpression.evaluate(binding.source, binding.lookupFunctions)
+            const source = binding.source || scope
+            // if (value.binding && value.binding._destroyed) { // || binding._destroyed || !source || !source.bindingContext
+            if (!source || !source.bindingContext) { // || binding._destroyed || !source || !source.bindingContext
+              logger.error('[connect-subscription] binding or scope already destroyed!', this.args[0].name, 'new value', value, binding, 'this', this)
+              subscription.unsubscribe()
+              return
+            }
+            logger.debug('[connect-subscription] updating binding for', this.args[0].name, 'prev value', observable._cycleShared.last, 'new value', value, 'source', source, scope, this)
+            // try {
+            const bindingValue = binding.sourceExpression.evaluate(source, binding.lookupFunctions)
             binding.updateTarget(bindingValue) // update the whole binding
+            // } catch (err) {
+            //   logger.error('[connect-subscription] binding or scope already destroyed?', this.args[0].name, 'new value', value, binding)
+            // }
           }, 
           (error) => logger.error(`binding error for ${name}`, error), 
-          () => logger.debug(`observable for ${name} complete`)
+          () => logger.debug(`[connect-subscription] observable for ${name} complete`)
         )
+        this._cycleSubscription = subscription
         // TODO: cleanup after unbound?
       } else {
-        // TODO: if observable is null - create a new one, like for CycleAction!
-        logger.error('the argument passed in to the binding is not a CycleObservable', observable)
+        logger.error('[connect] the argument passed in to the binding is not a CycleObservable', observable)
       }
       return
     }
+    /*
     if (this.name == 'cycleAction') {
+      logger.debug('[connect] start connect for ACTION:', this.args[0].name)      
       const observable = this.args[0].evaluate(scope, binding.lookupFunctions, true) as CycleSharedActionObservable<any>
       if (!observable) {
-        console.log('new logic: setting mamma mia cycleAction')
+        console.log('[connect] setting mamma mia cycleAction for', this.args[0].name)
         binding.updateTarget( //this.args[0]
           changableAction(() => {
             const argsToEval = Array.from(this.args)
@@ -269,6 +332,8 @@ export function configure(frameworkConfig: FrameworkConfiguration) {
             return evalList(scope, argsToEval, binding.lookupFunctions)
           })
         )
+      } else {
+        console.log('[connect] mamma mia cycleAction should have already been set for', this.args[0].name)        
       }
       return
       // this is used to set the value of the binding to a metadata object that expresses it
@@ -281,21 +346,34 @@ export function configure(frameworkConfig: FrameworkConfiguration) {
       //   // new CycleBindingAction(name, context, Array.from(this.args), scope, binding.lookupFunctions)
       // )
     }
+    */
   }
   
   const callScopeConstructor: Function = CallScope.prototype.constructor
   CallScope.prototype.constructor = function() {
     callScopeConstructor.apply(this, arguments)
+    logger.debug('[constructor]')    
     this.isAssignable = true
   }
   
+  /**
+   * updates the value on the context and any observers that might be listening
+   */
   CallScope.prototype.assign = function assign(scope: Scope, value: any, lookupFunctions: any): any {
+    
+    if (this.name == 'cycleValueTest' || this.name == 'cycleActionTest') {
+      logger.debug(`[assign] [${this.name}]`, this.args[0].name, '=', value, this, scope, 'value of target', this.args[0].evaluate(scope, lookupFunctions, true))      
+      return
+    }
+    
     // NEW LOGIC:
-    if (this.name == 'cycle') {
+    if (this.name == 'cycleValue') {
       const observable = this.args[0].evaluate(scope, lookupFunctions, true) as CycleSharedObservable<any>
       if (isCycleShareObservable(observable)) {
-        logger.debug('new logic: assign', value)
+        logger.debug('[assign]', this.args[0].name, value)
         observable._cycleShared.next({ binding: this, value })
+      } else {
+        logger.error('[assign] trying to set a value but no underlying observable exists for:', this.args[0].name)        
       }
       return
     }
@@ -306,36 +384,98 @@ export function configure(frameworkConfig: FrameworkConfiguration) {
   const callScopeEvaluate: Function = CallScope.prototype.evaluate
   CallScope.prototype.evaluate = function evaluate(scope: Scope, lookupFunctions, mustEvaluate: boolean) {
 
+    if (this.name == 'cycleValueTest' || this.name == 'cycleActionTest') {
+      logger.debug(`[evaluate] [${this.name}]`, this.args[0].name, this, scope, 'value of target', this.args[0].evaluate(scope, lookupFunctions, true))      
+      return
+    }
+    
     // NEW LOGIC:
-    if (this.name == 'cycle') {
+    if (this.name == 'cycleValue') {
       const observable = this.args[0].evaluate(scope, lookupFunctions, true) as CycleSharedObservable<any>
       if (isCycleShareObservable(observable)) {
-        logger.debug('new logic: retrieve last value')
+        logger.debug('[evaluate] retrieve last value of:', this.args[0].name)
         return observable._cycleShared.last
+      } else {
+        logger.error('[evaluate] trying to get a value but no underlying observable exists for:', this.args[0].name)
       }
+      return
     }
     if (this.name == 'cycleAction') {
       const observable = this.args[0].evaluate(scope, lookupFunctions, true) as CycleSharedActionObservable<any>
       if (isCycleShareObservable(observable)) {
-        logger.debug('new logic: trigger an action')
+        const event = scope.overrideContext.$event
+        if (!event) {
+          // this simply means it was not an action that was triggered, 
+          // but that we are binding TO the action, and the system wants its value
+          // it would be safer to do this explicitly, i.e.
+          // cycleActionShare(action, 'param')
+          // instead of assuming the person is binding and not evaluating
+          return observable
+        }
         const argsToEval = Array.from(this.args)
         argsToEval.shift()
-        const args = evalList(scope, argsToEval, lookupFunctions)
-        const event = scope.overrideContext.$event
-        observable._cycleShared.next({ event, arguments: observable._cycleShared.getArgs(args) })
-        // observable._cycleShared.next({ value: { event, arguments: observable._cycleShared.getArgs(args) }, binding: this })
-        // return
+        const args = argsToEval.map(arg => arg.evaluate(scope, lookupFunctions))
+        // const args = evalList(scope, argsToEval, lookupFunctions)
+        // TODO: make originalArguments and arguments separate
+        logger.debug('[evaluate] trigger an action of:', this.args[0].name, {event, args})        
+        observable._cycleShared.next(event, args)
         return observable._cycleShared.onTriggerReturn
+      } else {
+        logger.error('[evaluate] trying to trigger an action but no underlying observable exists:', this.args[0].name)
       }
+      return
     }
     return callScopeEvaluate.apply(this, arguments)
   }
   
+  let globalCount = 0
+  
   CallScope.prototype.bind = function bind(binding: Binding & any, scope: Scope, lookupFunctions) {
+
+    if (this.name == 'cycleValueTest' || this.name == 'cycleActionTest') {
+      let valueOfTarget = this.args[0].evaluate(scope, lookupFunctions, true)
+      if (valueOfTarget === undefined) {
+        this.args[0].assign(scope, `[${this.name}] count:${++globalCount}`)
+        valueOfTarget = this.args[0].evaluate(scope, lookupFunctions, true)
+      }
+      logger.debug(`[bind] [${this.name}]`, this.args[0].name, this, binding, scope, 'value of target', valueOfTarget)
+      return
+    }
+    
+    if (this.name == 'cycleValue' || this.name == 'cycleAction') {
+      let valueOfTarget = this.args[0].evaluate(scope, lookupFunctions, true)
+      const getArgs = () => {
+        const argsToEval = Array.from(this.args)
+        argsToEval.shift()
+        return evalList(scope, argsToEval, lookupFunctions)
+      }
+      if (valueOfTarget === undefined) {
+        let newChangable
+        if (this.name == 'cycleValue') {
+          logger.debug('[bind] will create a changable VALUE observable for', this.args[0].name)
+          newChangable = changable() // create empty changable
+        } else {
+          logger.debug('[bind] will create a changable EVENT observable for', this.args[0].name, 'with args method like', () => evalList(scope, this.args, lookupFunctions))
+          newChangable = changableAction(getArgs) // create changableAction          
+        }
+        this.args[0].assign(scope, newChangable)
+        valueOfTarget = this.args[0].evaluate(scope, lookupFunctions, true)
+      }
+      if (isCycleShareObservable(valueOfTarget) && valueOfTarget._cycleShared instanceof CycleSharedAction && !valueOfTarget._cycleShared.argsMethod) {
+        // in case we pre-created the observable in the cycle()
+        // this happens when binding to a value in a different context
+        // since bind() is ready, cycle runs, but no CycleObservable is in context
+        valueOfTarget._cycleShared.argsMethod = getArgs
+      }
+      logger.debug(`[bind] [${this.name}]`, this.args[0].name, this, binding, scope, 'value of target', valueOfTarget)
+      return
+    }
+    /*
     const expression = binding.sourceExpression // as Expression & { name:string, ancestor:any, args:Array<Expression>, _unbind:()=>void }
 
     // NEW LOGIC:
-    if (expression.name == 'cycle' || expression.name == 'cycleAction') {
+    if (expression.name == 'cycleValue' || expression.name == 'cycleAction') {
+      logger.debug('[bind] start bind for', expression.args[0].name)
       // TODO: delay this?
       const observable = expression.args[0].evaluate(scope, lookupFunctions, true) as CycleSharedObservable<any>
       if (!observable) {
@@ -344,11 +484,11 @@ export function configure(frameworkConfig: FrameworkConfiguration) {
         
         // TODO: lazy creation on first use ? store only args for first use?
         if (!context[name]) // TODO: if not undefined
-          if (expression.name == 'cycle') {
-            logger.debug('new logic: will create a changable VALUE observable for', expression.args[0].name, 'context', context)
+          if (expression.name == 'cycleValue') {
+            logger.debug('[bind] will create a changable VALUE observable for', expression.args[0].name, 'context', context)
             context[name] = changable() // create empty changable
           } else {
-            logger.debug('new logic: will create a changable EVENT observable for', expression.args[0].name, 'with args method like', () => evalList(scope, this.args, lookupFunctions), 'context', context)
+            logger.debug('[bind] will create a changable EVENT observable for', expression.args[0].name, 'with args method like', () => evalList(scope, this.args, lookupFunctions), 'context', context)
             context[name] = changableAction(() => {
               const argsToEval = Array.from(this.args)
               argsToEval.shift()
@@ -358,9 +498,27 @@ export function configure(frameworkConfig: FrameworkConfiguration) {
       }
       return
     }
+    */
   }
   
   CallScope.prototype.unbind = function unbind(binding, scope: Scope) {
+    
+    if (this.name == 'cycleValue' || this.name == 'cycleAction') {
+      // logger.debug(`[unbind] [${this.name}]`, this.args[0].name, this, binding, scope)
+      
+      if (this._cycleSubscription) {
+        logger.debug(`[unbind] [${this.name}] unsubscribing`, this.args[0].name, this, binding, scope, new Date())
+        
+        // TODO: this doesn't work. why?! perhaps we need to hook the binding itself?
+        this._cycleSubscription.unsubscribe()
+        this._cycleSubscription = undefined
+        
+        // this._destroyed = true
+      }
+      
+      return
+    }
+    
     const expression = binding.sourceExpression
     // const name = expression.name // act only if 'cycleValue'
     // if (expression._unbind) {
@@ -373,7 +531,7 @@ export function configure(frameworkConfig: FrameworkConfiguration) {
   
 }
 
-export type Action = { event: AnyEvent, arguments: Array<any> };
+export type Action = { event: AnyEvent, arguments: Array<any>, originArguments: Array<any> };
 export type Value = string | number
 export type ViewValue = Action | Value
 
