@@ -1,6 +1,6 @@
 import {CallScope, Scope, getContextFor, Binding, Expression} from 'aurelia-binding'
 import {View} from 'aurelia-templating'
-import {Observable, Observer, Subscription, ReplaySubject} from 'rxjs/Rx'
+import {Observable, Observer, Subscription, ReplaySubject, BehaviorSubject, Subject} from 'rxjs/Rx'
 import Cycle from '@cycle/core/lib/index'
 import rxjsAdapter from '@cycle/rxjs-adapter/lib/index'
 import { DriverFunction } from '@cycle/base'
@@ -72,13 +72,16 @@ export interface CycleSharedActionObservable<T> extends Observable<T> {
 
 export function changableAction<T>(argsMethod: ()=>Array<any>) {
   let observers = new Set<Observer<ValueAndBinding<T>>>()
-  const observable = (Observable.create(function (observer: Observer<ValueAndBinding<T>>) {
-    observers.add(observer)
-    // Any cleanup logic might go here
-    return function () {
-      observers.delete(observer)
-    }
-  }) as Observable<T>)
+  // const observable = (Observable.create(function (observer: Observer<ValueAndBinding<T>>) {
+  //   observers.add(observer)
+  //   // Any cleanup logic might go here
+  //   return function () {
+  //     observers.delete(observer)
+  //   }
+  // }) as Observable<T>)
+  
+  const observable = new Subject() //as BehaviorSubject<any>
+  observers.add(observable) // TODO: refactor
   
   const sharedObservable = observable as CycleSharedActionObservable<T> //.publish().refCount()
   
@@ -90,17 +93,24 @@ export function changableAction<T>(argsMethod: ()=>Array<any>) {
 export function changable<T>(initialValue?: T) {
   let observers = new Set<Observer<ValueAndBinding<T>>>()
   
+  // const observable = new BehaviorSubject(initialValue) //as BehaviorSubject<any>
+  const observable = new ReplaySubject(1) //as BehaviorSubject<any>
+  if (initialValue !== undefined)
+    observable.next(initialValue)
+  
+  observers.add(observable) // TODO: refactor
+  
+  /*
   const observable = (Observable.create(function (observer: Observer<ValueAndBinding<T>>) {
-  // const observable = (ReplaySubject.create(function (observer: Observer<ValueAndBinding<T>>) {
     observers.add(observer)
     // Any cleanup logic might go here
     return function () {
       observers.delete(observer)
     }
   }) as Observable<T>)
-  
-  // const sharedObservable = observable as CycleSharedObservable<T>
   const sharedObservable = observable.publish().refCount() as CycleSharedObservable<T> //TODO: 
+  */
+  const sharedObservable = observable as CycleSharedObservable<T>
   
   sharedObservable._cycleShared = new CycleSharedValue(observers, initialValue)
   
@@ -445,6 +455,10 @@ export function configure(frameworkConfig: FrameworkConfiguration) {
     if (this.name == 'cycleValue' || this.name == 'cycleAction') {
       let valueOfTarget = this.args[0].evaluate(scope, lookupFunctions, true)
       const getArgs = () => {
+        if (!scope.bindingContext) {
+          logger.error(`[bind-getargs] sorry, can't get args when no bindingContext exists`)
+          return []
+        }
         const argsToEval = Array.from(this.args)
         argsToEval.shift()
         return evalList(scope, argsToEval, lookupFunctions)
