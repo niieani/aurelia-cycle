@@ -2,6 +2,10 @@
 
 An Aurelia plugin that allows you to manage Aurelia's View-Bindings functionally, converting them into RxJS observables, consumable as Cycle.js drivers.
 
+## Note
+
+**Please do not use this package yet, I'm in the process of its 3rd rewrite, so the API and functionality will change.**
+
 ## Why?
 
 Cycle.js' architecture is arguably better (and definitely more flexible) than the traditional MVC, or even the more recent Flux or Redux programming patterns.
