@@ -1,0 +1,19 @@
+{
+  "name": "aurelia-plugin-template",
+  "dependencies": {
+    "bluebird": "registry:npm/bluebird#3.3.4+20160515010139"
+  },
+  "globalDependencies": {
+    "aurelia-dependency-injection": "npm:aurelia-dependency-injection/dist/aurelia-dependency-injection.d.ts",
+    "aurelia-framework": "npm:aurelia-framework/dist/aurelia-framework.d.ts",
+    "aurelia-binding": "npm:aurelia-binding/dist/aurelia-binding.d.ts",
+    "aurelia-loader": "npm:aurelia-loader/dist/aurelia-loader.d.ts",
+    "aurelia-logging": "npm:aurelia-logging/dist/aurelia-logging.d.ts",
+    "aurelia-metadata": "npm:aurelia-metadata/dist/aurelia-metadata.d.ts",
+    "aurelia-pal": "npm:aurelia-pal/dist/aurelia-pal.d.ts",
+    "aurelia-path": "npm:aurelia-path/dist/aurelia-path.d.ts",
+    "aurelia-task-queue": "npm:aurelia-task-queue/dist/aurelia-task-queue.d.ts",
+    "aurelia-templating": "npm:aurelia-templating/dist/aurelia-templating.d.ts",
+    "aurelia-templating-resources": "npm:aurelia-templating-resources/dist/aurelia-templating-resources.d.ts"
+  }
+}

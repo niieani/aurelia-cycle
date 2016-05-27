@@ -6,45 +6,25 @@ var sourcemaps = require('gulp-sourcemaps');
 var paths = require('../paths');
 var assign = Object.assign || require('object.assign');
 var notify = require('gulp-notify');
-var typescript = require('gulp-tsb');
-var sass = require('gulp-sass');
+var typescript = require('gulp-typescript');
+var tsProject = typescript.createProject('tsconfig.json');
+var to5 = require('gulp-babel');
 
-// transpiles changed es6 files to SystemJS format
+// transpiles changed typescript files first to es2015, 
+// then to es5 with commonjs modules
 // the plumber() call prevents 'pipe breaking' caused
 // by errors from other gulp plugins
 // https://www.npmjs.com/package/gulp-plumber
-var typescriptCompiler = typescriptCompiler || null;
 gulp.task('build-system', function() {
-  if (!typescriptCompiler) {
-    const compilerOptions = require('../../tsconfig.json').compilerOptions;
-    delete compilerOptions.moduleResolution;
-    typescriptCompiler = typescript.create(compilerOptions);
-  }
-  return gulp.src(paths.dtsSrc.concat(paths.source).concat(paths.sourceJs))
+  return gulp.src(paths.dtsSrc.concat(paths.source))
     .pipe(plumber())
-    .pipe(sourcemaps.init({loadMaps: true}))    
-    .pipe(typescriptCompiler())
-    .pipe(sourcemaps.write({includeContent: true}))
-    .pipe(gulp.dest(paths.output));
-});
-
-// copies changed html files to the output directory
-gulp.task('build-html', function() {
-  return gulp.src(paths.html)
-    .pipe(changed(paths.output, {extension: '.html'}))
-    .pipe(gulp.dest(paths.output));
-});
-
-// copies changed css files to the output directory
-gulp.task('build-css', function() {
-  return gulp.src(paths.css)
-    .pipe(sourcemaps.init())
-    .pipe(sass({
-      includePaths: require("bourbon").includePaths
-    }))
-    .pipe(sourcemaps.write())
-    .pipe(changed(paths.cssDist, {extension: '.css'}))
-    .pipe(gulp.dest(paths.cssDist));
+    .pipe(sourcemaps.init({loadMaps: true}))
+    .pipe(typescript(tsProject))
+    .pipe(sourcemaps.write({includeContent: false, sourceRoot: '/src'}))
+    .pipe(gulp.dest(paths.output + 'es2015'))
+    .pipe(to5())
+    .pipe(sourcemaps.write({includeContent: false, sourceRoot: '/src'}))
+    .pipe(gulp.dest(paths.output + 'commonjs'));
 });
 
 // this task calls the clean task (located
@@ -54,7 +34,7 @@ gulp.task('build-css', function() {
 gulp.task('build', function(callback) {
   return runSequence(
     'clean',
-    ['build-system', 'build-html', 'build-css'],
+    'build-system',
     callback
   );
 });
